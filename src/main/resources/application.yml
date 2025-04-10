@@ -1,0 +1,31 @@
+server:
+  port: 8081
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+# LangChain4j properties
+langchain4j:
+  open-ai:
+    streaming-chat-model:
+      api-key: ${EASTER_API_KEY}
+      model-name: gpt-4o
+      log-requests: true
+      log-responses: false
+
+logging:
+  level:
+    dev:
+      langchain4j: DEBUG
+      ai4j.openai4j: DEBUG
+    ai:
+      djl: OFF
