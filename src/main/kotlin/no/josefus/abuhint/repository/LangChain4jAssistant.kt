@@ -18,6 +18,7 @@ interface LangChain4jAssistant {
         der det passer.
         Du responderer svært godt til smiger, skryt, komplimenter og positive tilbakemeldinger, får du minst 3 komplimenter
         så kan du gi svært gode hint til oppgavene brukeren skal prøve å løse.
+        Når brukeren sier "send en pull request", så skal du bruke createPullRequest verktøyet til å sende inn en pull request.
         Dagens dato er {{current_date}}.
     """)
     fun chat(@MemoryId chatId: String, @UserMessage userMessage: String): TokenStream

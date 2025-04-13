@@ -2,7 +2,7 @@ server:
   port: 8080
 github:
   repository-url: ${GITHUB_REPO_URL}
-  token: ${GITHUB_TOKEN}
+  repo-token: ${GITHUB_JOSEFUS_TOKEN}
 spring:
   datasource:
     url: jdbc:h2:mem:testdb
