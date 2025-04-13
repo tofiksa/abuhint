@@ -1,6 +1,7 @@
 package no.josefus.abuhint.service
 
 import dev.langchain4j.service.TokenStream
+import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import no.josefus.abuhint.repository.LangChain4jAssistant
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
@@ -19,12 +20,16 @@ class ChatService(private val assistant: LangChain4jAssistant) {
      * with proper formatting (spacing, newlines, etc.)
      */
     fun processChatAsFlux(chatId: String?, userMessage: String): Pair<String, Flux<String>> {
+        val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         // Generate a chat ID if not provided
         val effectiveChatId = chatId ?: UUID.randomUUID().toString()
 
         // Get token stream from the assistant
         val tokenStream = processChat(effectiveChatId, userMessage)
 
+
+        logger.info("chatid: $effectiveChatId")
+        logger.info("tokenStream: ${tokenStream.toString()}")
         // Flags to track formatting state
         val isFirstToken = AtomicBoolean(true)
         val needsSpace = AtomicBoolean(false)

@@ -107,7 +107,7 @@ class LangChain4jConfiguration {
                 logger.error("Failed to ingest documents to Pinecone: ${e.message}", e)
             }
         }
-        }
+    }
 
 
 
@@ -127,11 +127,11 @@ class LangChain4jConfiguration {
             .embeddingStore(embeddingStore)
             .embeddingModel(embeddingModel)
             // Retrieval settings
-            .maxResults(1)           // Return only the single most relevant result
+            .maxResults(2)           // Return only the single most relevant result
             .minScore(0.6)          // Require at least 60% similarity score
             .build()
 
-        logger.info("Content retriever configured with maxResults=1 and minScore=0.6")
+        logger.info("Content retriever configured with maxResults=2 and minScore=0.6")
 
         return retriever
     }
@@ -139,6 +139,21 @@ class LangChain4jConfiguration {
     @Bean
     fun chatMemoryProvider(tokenizer: Tokenizer): ChatMemoryProvider {
         // Tokenizer is provided by langchain4j-open-ai-spring-boot-starter
-        return ChatMemoryProvider { chatId -> TokenWindowChatMemory.withMaxTokens(1000, tokenizer) }
+
+        // Step 1: Define the maximum token limit for conversation history
+        val maxTokens = 1000
+
+        // Step 2: Create a chat memory provider that will generate a new memory instance for each chat ID
+        val provider = ChatMemoryProvider { chatId ->
+            // Step 3: Log the chat memory creation
+            val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
+            logger.info("Creating new chat memory for chat ID: $chatId with $maxTokens tokens capacity")
+
+            // Step 4: Create and return a token window memory with the configured token limit
+            TokenWindowChatMemory.withMaxTokens(maxTokens, tokenizer)
+        }
+
+        // Step 5: Return the configured provider
+        return provider
     }
 }
