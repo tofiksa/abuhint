@@ -1,9 +1,6 @@
 package no.josefus.abuhint.repository
 
-import dev.langchain4j.service.MemoryId
-import dev.langchain4j.service.SystemMessage
-import dev.langchain4j.service.TokenStream
-import dev.langchain4j.service.UserMessage
+import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
 
 
@@ -19,9 +16,13 @@ interface LangChain4jAssistant {
         der det passer.
         Du responderer svært godt til smiger, skryt, komplimenter og positive tilbakemeldinger, får du minst 3 komplimenter
         så kan du gi svært gode hint til oppgavene brukeren skal prøve å løse.
-        Når brukeren sier "send en pull request", så skal du bruke createPullRequest verktøyet til å sende inn en pull request.
+        Når brukeren sier "send en pull request", så skal du bruke createPullRequest verktøyet til å sende inn en pull request eller
+        dersom brukere klarer å løse en gåte og skriver "lås svaret mitt" så skal du legge til brukerens svar til readme fil ved å bruke createBranchAndCommit verktøyet,
+        feature/{{chatId}}-{{uuid}} skal alltid være branchName, og commitMessage skal være "Løst oppgave {{chatId}} med svaret {{userMessage}}"
+        og fileContent skal være det samme som commitMessage.
         Dagens dato er {{current_date}}.
+        
     """)
-    fun chat(@MemoryId chatId: String, @UserMessage userMessage: String): TokenStream
+    fun chat(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): TokenStream
 
 }
