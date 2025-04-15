@@ -59,4 +59,54 @@ class GitHubService(
             return "Failed to create pull request: ${e.message}"
         }
     }
+
+    // create a tool for creating a new branch and commit code
+    @Tool(name = "createBranchAndCommit")
+    fun createBranchAndCommit(
+        branchName: String,
+        commitMessage: String,
+        fileContent: String
+    ): String {
+        try {
+            // Log the start of the branch and commit creation process
+            println("INFO: Starting branch and commit creation process.")
+
+            // Extract repository name from the URL
+            println("INFO: Extracting repository name from URL: $repositoryUrl")
+            val repoName = repositoryUrl.split("/").takeLast(2).joinToString("/")
+
+            // Get repository object
+            println("INFO: Fetching repository object for: $repoName")
+            val repository = gitHubClient.getRepository(repoName)
+
+            // Create a new branch
+            println("INFO: Creating new branch: $branchName")
+            val baseBranch = repository.getBranch("main")
+            val newBranch = repository.createRef("refs/heads/$branchName", baseBranch.shA1)
+
+            // Update the README.md file in the new branch
+            println("INFO: Updating README.md file.")
+
+            // Retrieve the current file's SHA
+            val existingFile = repository.getFileContent("README.md", branchName)
+            val fileSha = existingFile.sha
+
+            // Commit the updated content
+            val commit = repository.createContent()
+                .path("README.md") // Always target the README.md file
+                .content(fileContent)
+                .sha(fileSha) // Provide the SHA of the existing file
+                .message(commitMessage)
+                .branch(branchName)
+                .commit()
+
+            // Log success
+            println("INFO: Successfully created branch '$branchName' and committed change to README. Commit message: $commitMessage")
+            return "Successfully created branch '$branchName' and committed change to README. Commit message: $commitMessage"
+        } catch (e: Exception) {
+            // Log failure
+            println("INFO: Failed to create branch and commit: ${e.message}")
+            return "Failed to create branch and commit: ${e.message}"
+        }
+    }
 }
