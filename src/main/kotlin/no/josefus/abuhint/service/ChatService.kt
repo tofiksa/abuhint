@@ -25,7 +25,8 @@ class ChatService(private val assistant: LangChain4jAssistant,
 
         val retrievedContext = retriever.retrieve(Query.from(userMessage))
         val newMessage = retrievedContext[0].textSegment().text() + userMessage
-        return assistant.chat(chatId, newMessage)
+        val uuid = UUID.randomUUID().toString()
+        return assistant.chat(chatId, userMessage, uuid)
     }
 
     /**
