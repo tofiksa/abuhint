@@ -6,6 +6,7 @@ import dev.langchain4j.service.TokenStream
 import dev.langchain4j.service.UserMessage
 import dev.langchain4j.service.spring.AiService
 
+
 @AiService
 interface LangChain4jAssistant {
 
@@ -22,4 +23,5 @@ interface LangChain4jAssistant {
         Dagens dato er {{current_date}}.
     """)
     fun chat(@MemoryId chatId: String, @UserMessage userMessage: String): TokenStream
+
 }

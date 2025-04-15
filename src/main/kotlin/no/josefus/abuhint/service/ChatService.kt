@@ -1,5 +1,7 @@
 package no.josefus.abuhint.service
 
+import dev.langchain4j.model.embedding.EmbeddingModel
+import dev.langchain4j.rag.query.Query
 import dev.langchain4j.service.TokenStream
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import no.josefus.abuhint.repository.LangChain4jAssistant
@@ -9,10 +11,21 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
-class ChatService(private val assistant: LangChain4jAssistant) {
+class ChatService(private val assistant: LangChain4jAssistant,
+    private val langChain4jConfiguration: LangChain4jConfiguration
+    ) {
 
     fun processChat(chatId: String, userMessage: String): TokenStream {
-        return assistant.chat(chatId, userMessage)
+        // inject embedding model
+        val embeddingModel: EmbeddingModel = langChain4jConfiguration.embeddingModel()
+        // inject embedding store
+        val embeddingStore = langChain4jConfiguration.embeddingStore(embeddingModel)
+
+        val retriever = langChain4jConfiguration.contentRetriever(embeddingStore, embeddingModel)
+
+        val retrievedContext = retriever.retrieve(Query.from(userMessage))
+        val newMessage = retrievedContext[0].textSegment().text() + userMessage
+        return assistant.chat(chatId, newMessage)
     }
 
     /**

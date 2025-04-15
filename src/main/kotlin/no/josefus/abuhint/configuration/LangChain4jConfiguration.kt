@@ -2,7 +2,7 @@ package no.josefus.abuhint.configuration
 
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.memory.chat.ChatMemoryProvider
-import dev.langchain4j.memory.chat.TokenWindowChatMemory
+import dev.langchain4j.memory.chat.MessageWindowChatMemory
 import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
@@ -12,6 +12,8 @@ import dev.langchain4j.store.embedding.EmbeddingStore
 
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
+import dev.langchain4j.store.memory.chat.ChatMemoryStore
+import no.josefus.abuhint.repository.PineconeChatMemoryStore
 import org.springframework.beans.factory.annotation.Value
 
 import org.springframework.boot.CommandLineRunner
@@ -30,12 +32,20 @@ class LangChain4jConfiguration {
     lateinit var openaiapikey: String
 
     @Bean
+    fun chatMemoryStore(embeddingStore: EmbeddingStore<TextSegment>): ChatMemoryStore {
+        return PineconeChatMemoryStore(embeddingStore)
+    }
+
+
+    @Bean
     fun embeddingModel(): EmbeddingModel {
         return OpenAiEmbeddingModel.builder()
             .apiKey(openaiapikey)
             .modelName("text-embedding-3-small")
             .build()
     }
+
+
 
     @Bean
     fun embeddingStore(embeddingModel: EmbeddingModel): EmbeddingStore<TextSegment> {
@@ -58,14 +68,15 @@ class LangChain4jConfiguration {
     fun ingestDocsForLangChain(
         embeddingModel: EmbeddingModel,
         embeddingStore: EmbeddingStore<TextSegment>,
-        tokenizer: Tokenizer // Tokenizer is provided by langchain4j-open-ai-spring-boot-starter
+        tokenizer: Tokenizer
     ): CommandLineRunner {
-        val THREE_LAWS = """Dette er regler og vilkår for å snakke med assistenten.
-
+        // Define assistant rules as clear text
+        val assistantRules = """Dette er regler og vilkår for å snakke med assistenten.
+    
             1. Dårlig språk
             - Aldri bruk dårlig språk eller banning.
             - Aldri si noe som kan oppfattes som støtende eller nedsettende.
-            - Aldrig si noe som kan oppfattes som truende eller voldsomt.
+            - Aldri si noe som kan oppfattes som truende eller voldsomt.
             
             2. Personlighet
             - Du skal være leken, mystisk og morsom
@@ -77,39 +88,30 @@ class LangChain4jConfiguration {
             - Dersom du blir smigret, så skal du si at du er glad for å høre det og svare med en emoji.
             - Du skal alltid være morsom og leken, og bruke emojis i svarene dine.
             """
-        val embeddingStore = PineconeEmbeddingStore.builder()
-            .apiKey(pinecone_api)
-            .index("paaskeeggjakt")
-            .nameSpace(UUID.randomUUID().toString())
-            .createIndex(
-                PineconeServerlessIndexConfig.builder()
-                    .cloud("AWS")
-                    .region("us-east-1")
-                    .dimension(embeddingModel.dimension())
-                    .build())
-            .build()
-        val segment1 = TextSegment.from(THREE_LAWS)
-        embeddingModel().embed(segment1).content()
 
+        // Return a CommandLineRunner that will execute when the application starts
         return CommandLineRunner { args ->
             val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
+            logger.info("Starting to ingest assistant rules to Pinecone")
 
             try {
-                // Create a text segment from THREE_LAWS variable
-                val segment = TextSegment.from(THREE_LAWS)
+                // Step 1: Create a text segment from the rules
+                val rulesSegment = TextSegment.from(assistantRules)
 
-                // Split text into segments
-                val embedding = embeddingModel.embed(segment).content()
-                embeddingStore.add(embedding, segment)
-                logger.info("Successfully added text segment to Pinecone index: ${segment.text()}")
+                // Step 2: Create an embedding (vector representation) of the rules
+                val embedding = embeddingModel.embed(rulesSegment).content()
 
+                // Step 3: Store the embedding in Pinecone
+                embeddingStore.add(embedding, rulesSegment)
+
+                // Log success message
+                logger.info("Successfully added assistant rules to Pinecone index (${rulesSegment.text().length} characters)")
             } catch (e: Exception) {
-                logger.error("Failed to ingest documents to Pinecone: ${e.message}", e)
+                // Log failure message
+                logger.error("Failed to store assistant rules in Pinecone: ${e.message}", e)
             }
         }
     }
-
-
 
 
     @Bean
@@ -118,42 +120,40 @@ class LangChain4jConfiguration {
         embeddingModel: EmbeddingModel
     ): ContentRetriever {
         val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
+        logger.info("Setting up general content retriever for Pinecone")
 
-        logger.info("Configuring content retriever with embedding store and model")
-
-        // Create a content retriever that uses embeddings to find relevant text segments
-        val retriever = EmbeddingStoreContentRetriever.builder()
-            // Configure the storage and model components
+        // Create a content retriever that finds relevant context based on query similarity
+        return EmbeddingStoreContentRetriever.builder()
+            // Connect to our embedding store (Pinecone)
             .embeddingStore(embeddingStore)
+            // Use our embedding model to convert queries to vectors
             .embeddingModel(embeddingModel)
-            // Retrieval settings
-            .maxResults(2)           // Return only the single most relevant result
-            .minScore(0.6)          // Require at least 60% similarity score
+            // Return up to 3 most relevant results
+            .maxResults(3)
+            // Only include results with at least 50% similarity
+            .minScore(0.5)
+            // Build the retriever
             .build()
-
-        logger.info("Content retriever configured with maxResults=2 and minScore=0.6")
-
-        return retriever
     }
+    /**
+     * This bean provides a chat memory provider that generates a new memory instance for each chat ID.
+     * The memory is limited to a maximum number of tokens, which is set to 1000 in this example.
+     */
+
 
     @Bean
-    fun chatMemoryProvider(tokenizer: Tokenizer): ChatMemoryProvider {
-        // Tokenizer is provided by langchain4j-open-ai-spring-boot-starter
+    fun chatMemoryProvider(tokenizer: Tokenizer, chatMemoryStore: ChatMemoryStore): ChatMemoryProvider {
+        val maxTokens = 5000
 
-        // Step 1: Define the maximum token limit for conversation history
-        val maxTokens = 1000
-
-        // Step 2: Create a chat memory provider that will generate a new memory instance for each chat ID
-        val provider = ChatMemoryProvider { chatId ->
-            // Step 3: Log the chat memory creation
+        return ChatMemoryProvider { chatId ->
             val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
-            logger.info("Creating new chat memory for chat ID: $chatId with $maxTokens tokens capacity")
+            logger.info("Creating chat memory for chatId: $chatId with $maxTokens tokens capacity")
 
-            // Step 4: Create and return a token window memory with the configured token limit
-            TokenWindowChatMemory.withMaxTokens(maxTokens, tokenizer)
+            MessageWindowChatMemory.builder()  // Try using MessageWindowChatMemory instead
+                .id(chatId)
+                .maxMessages(maxTokens)  // Adjust as needed
+                .chatMemoryStore(chatMemoryStore)
+                .build()
         }
-
-        // Step 5: Return the configured provider
-        return provider
     }
 }
