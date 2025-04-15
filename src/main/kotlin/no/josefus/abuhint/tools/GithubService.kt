@@ -109,4 +109,66 @@ class GitHubService(
             return "Failed to create branch and commit: ${e.message}"
         }
     }
+
+    @Tool(name = "getBranch")
+    fun getBranch(branchName: String): String {
+        try {
+            // Log the start of the branch retrieval process
+            println("INFO: Starting branch retrieval process.")
+
+            // Extract repository name from the URL
+            println("INFO: Extracting repository name from URL: $repositoryUrl")
+            val repoName = repositoryUrl.split("/").takeLast(2).joinToString("/")
+
+            // Get repository object
+            println("INFO: Fetching repository object for: $repoName")
+            val repository = gitHubClient.getRepository(repoName)
+
+            // Retrieve the branch content
+            println("INFO: Retrieving content from branch: $branchName")
+            val branchContent = repository.getFileContent("README.md", branchName)
+
+            // Log success
+            println("INFO: Successfully retrieved content from branch '$branchName'. Content: ${branchContent.content}")
+            return "Successfully retrieved content from branch '$branchName'. Content: ${branchContent.content}"
+        } catch (e: Exception) {
+            // Log failure
+            println("INFO: Failed to retrieve branch content: ${e.message}")
+            return "Failed to retrieve branch content: ${e.message}"
+        }
+    }
+
+    // push to the main branch
+    @Tool(name = "pushToMain")
+    fun pushToMain(branchName: String): String {
+        try {
+            // Log the start of the push process
+            println("INFO: Starting push to main branch process.")
+
+            // Extract repository name from the URL
+            println("INFO: Extracting repository name from URL: $repositoryUrl")
+            val repoName = repositoryUrl.split("/").takeLast(2).joinToString("/")
+
+            // Get repository object
+            println("INFO: Fetching repository object for: $repoName")
+            val repository = gitHubClient.getRepository(repoName)
+
+            // Push the branch to main
+            println("INFO: Pushing branch '$branchName' to main.")
+            val pullRequest = repository.createPullRequest(
+                "Merging changes from $branchName to main",
+                branchName,
+                "main",
+                "This is a pull request to merge changes from $branchName to main."
+            )
+
+            // Log success
+            println("INFO: Successfully pushed branch '$branchName' to main. Pull request created: ${pullRequest.htmlUrl}")
+            return "Successfully pushed branch '$branchName' to main. Pull request created: ${pullRequest.htmlUrl}"
+        } catch (e: Exception) {
+            // Log failure
+            println("INFO: Failed to push branch to main: ${e.message}")
+            return "Failed to push branch to main: ${e.message}"
+        }
+    }
 }
