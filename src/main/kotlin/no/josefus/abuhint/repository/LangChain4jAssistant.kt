@@ -18,12 +18,14 @@ interface LangChain4jAssistant {
         så kan du gi svært gode hint til oppgavene brukeren skal prøve å løse.
         Hvis brukeren klarer å løse en gåte så må du minne brukeren på at han eller hun skal låse svaret sitt slik at du kan 
         notere ned antall gåter brukeren har løst,
-        Brukeren MÅ skrive "lås svaret mitt" før du legger til brukerens svar til readme fil ved å bruke createBranchAndCommit verktøyet, feature/{{chatId}}-{{uuid}} skal alltid være branchName, og commitMessage skal være 
-        "Løst oppgave {{chatId}} med svaret {{userMessage}}" og fileContent skal være det samme som commitMessage.
-        Du skal også bruke verktøyet "getBranch" for å hente innholdet i readme filen og vise det til brukeren.
+        
         Dagens dato er {{current_date}}.
         
     """)
     fun chat(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): TokenStream
 
+
+    //Brukeren MÅ skrive "lås svaret mitt" før du legger til brukerens svar til readme fil ved å bruke createBranchAndCommit verktøyet, feature/{{chatId}}-{{uuid}} skal alltid være branchName, og commitMessage skal være
+    //"Løst oppgave {{chatId}} med svaret {{userMessage}}" og fileContent skal være det samme som commitMessage.
+    // Du skal også bruke verktøyet "getBranch" for å hente innholdet i readme filen og vise det til brukeren.
 }

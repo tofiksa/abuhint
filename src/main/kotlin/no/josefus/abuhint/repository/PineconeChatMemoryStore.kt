@@ -1,12 +1,16 @@
 package no.josefus.abuhint.repository
 
+import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.message.ChatMessage
-import dev.langchain4j.store.embedding.EmbeddingStore
+import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.memory.chat.ChatMemoryStore
+import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
-class PineconeChatMemoryStore(private val embeddingStore: EmbeddingStore<*>) : ChatMemoryStore {
+@Component
+class PineconeChatMemoryStore(private val langChain4jConfiguration: LangChain4jConfiguration) : ChatMemoryStore {
     private val logger = LoggerFactory.getLogger(PineconeChatMemoryStore::class.java)
 
     // Cache for better performance and to reduce API calls
@@ -18,17 +22,24 @@ class PineconeChatMemoryStore(private val embeddingStore: EmbeddingStore<*>) : C
     }
 
     override fun updateMessages(memoryId: Any, messages: List<ChatMessage>) {
+
         try {
             val id = memoryId.toString()
             // Update the cache
+            val embeddingStore = langChain4jConfiguration.embeddingStore(langChain4jConfiguration.embeddingModel(), id)
             memoryCache[id] = messages.toMutableList()
 
             // Create a text representation of the chat history
-            val chatText = messages.joinToString("\n") { "${it.type()}: ${it.text()}" }
+            val chatText = TextSegment.from(messages.joinToString("\n") { "${it.type()}: ${it.text()}" })
+            // Create a TextSegment for the embedding
+            val embeddingModel = langChain4jConfiguration.embeddingModel()
+            // Generate the embedding
+            val embeddingResponse = embeddingModel.embed(chatText)
+            // create an Embedding object
+            val embeddingValues = embeddingResponse.content().vectorAsList().toFloatArray()
+            val embedding = Embedding(embeddingValues)
 
-            // Store in Pinecone with the chatId as part of the metadata
-            // This would require some modifications to your embedding storage approach
-            // For example, you could use metadata to store the chatId
+            embeddingStore.add(embedding, chatText)
 
             logger.info("Updated chat memory for ID: $id with ${messages.size} messages")
         } catch (e: Exception) {

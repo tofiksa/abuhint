@@ -12,15 +12,12 @@ import dev.langchain4j.store.embedding.EmbeddingStore
 
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
-import dev.langchain4j.store.memory.chat.ChatMemoryStore
 import no.josefus.abuhint.repository.PineconeChatMemoryStore
 import org.springframework.beans.factory.annotation.Value
 
 import org.springframework.boot.CommandLineRunner
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-
-import java.util.*
 
 @Configuration
 class LangChain4jConfiguration {
@@ -31,10 +28,6 @@ class LangChain4jConfiguration {
     @Value("\${langchain4j.open-ai.streaming-chat-model.api-key}")
     lateinit var openaiapikey: String
 
-    @Bean
-    fun chatMemoryStore(embeddingStore: EmbeddingStore<TextSegment>): ChatMemoryStore {
-        return PineconeChatMemoryStore(embeddingStore)
-    }
 
 
     @Bean
@@ -47,24 +40,28 @@ class LangChain4jConfiguration {
 
 
 
-    @Bean
-    fun embeddingStore(embeddingModel: EmbeddingModel): EmbeddingStore<TextSegment> {
 
-        return PineconeEmbeddingStore.builder()
-            .apiKey(pinecone_api)
-            .index("paaskeeggjakt")
-            .nameSpace(UUID.randomUUID().toString())
-            .createIndex(
-                PineconeServerlessIndexConfig.builder()
+    fun embeddingStore(embeddingModel: EmbeddingModel, id: String): EmbeddingStore<TextSegment> {
+
+            val effectiveNamespace = id.ifEmpty { "startup" }
+
+            val indexConfig = PineconeServerlessIndexConfig.builder()
                 .cloud("AWS")
                 .region("us-east-1")
                 .dimension(embeddingModel.dimension())
-                .build())
-            .build()
+                .build()
+
+        return PineconeEmbeddingStore.builder()
+                .apiKey(pinecone_api)
+                .index("paaskeeggjakt")
+                .nameSpace(effectiveNamespace)
+                .createIndex(indexConfig)
+                .build()
+
     }
 
-    // In the real world, ingesting documents would often happen separately, on a CI server or similar
-    @Bean
+
+    // This is just a simple example to show how to use the embedding store
     fun ingestDocsForLangChain(
         embeddingModel: EmbeddingModel,
         embeddingStore: EmbeddingStore<TextSegment>,
@@ -114,7 +111,10 @@ class LangChain4jConfiguration {
     }
 
 
-    @Bean
+    /**
+     * This bean provides a content retriever that retrieves relevant context based on the user's query.
+     * It uses the Pinecone embedding store and the OpenAI embedding model to find similar content.
+     */
     fun contentRetriever(
         embeddingStore: EmbeddingStore<TextSegment>,
         embeddingModel: EmbeddingModel
@@ -142,7 +142,7 @@ class LangChain4jConfiguration {
 
 
     @Bean
-    fun chatMemoryProvider(tokenizer: Tokenizer, chatMemoryStore: ChatMemoryStore): ChatMemoryProvider {
+    fun chatMemoryProvider(tokenizer: Tokenizer, chatMemoryStore: PineconeChatMemoryStore): ChatMemoryProvider {
         val maxTokens = 5000
 
         return ChatMemoryProvider { chatId ->

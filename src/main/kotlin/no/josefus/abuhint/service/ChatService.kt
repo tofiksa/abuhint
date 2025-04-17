@@ -1,7 +1,6 @@
 package no.josefus.abuhint.service
 
 import dev.langchain4j.model.embedding.EmbeddingModel
-import dev.langchain4j.rag.query.Query
 import dev.langchain4j.service.TokenStream
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import no.josefus.abuhint.repository.LangChain4jAssistant
@@ -16,15 +15,7 @@ class ChatService(private val assistant: LangChain4jAssistant,
     ) {
 
     fun processChat(chatId: String, userMessage: String): TokenStream {
-        // inject embedding model
-        val embeddingModel: EmbeddingModel = langChain4jConfiguration.embeddingModel()
-        // inject embedding store
-        val embeddingStore = langChain4jConfiguration.embeddingStore(embeddingModel)
 
-        val retriever = langChain4jConfiguration.contentRetriever(embeddingStore, embeddingModel)
-
-        val retrievedContext = retriever.retrieve(Query.from(userMessage))
-        val newMessage = retrievedContext[0].textSegment().text() + userMessage
         val uuid = UUID.randomUUID().toString()
         return assistant.chat(chatId, userMessage, uuid)
     }
