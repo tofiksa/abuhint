@@ -14,6 +14,12 @@ class ChatService(private val assistant: LangChain4jAssistant,
     private val langChain4jConfiguration: LangChain4jConfiguration
     ) {
 
+    // Function to start a chat session using the startConversation in LangChain4jAssistant
+    fun startChat(chatId: String): TokenStream {
+        val uuid = UUID.randomUUID().toString()
+        return assistant.startConversation(chatId, uuid)
+    }
+
     fun processChat(chatId: String, userMessage: String): TokenStream {
 
         val uuid = UUID.randomUUID().toString()

@@ -5,10 +5,21 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Flux
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/chat")
 class ChatController(private val chatService: ChatService) {
+
+    // Endpoint to start a chat session using the startChat function from ChatService
+    @GetMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun startChat(@RequestParam(required = false) chatId: String?): Flux<String> {
+        val effectiveChatId = chatId ?: UUID.randomUUID().toString()
+        val responseFlux = chatService.startChat(effectiveChatId)
+        return responseFlux as Flux<String>
+    }
+
+
 
     @PostMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun sendMessage(

@@ -21,7 +21,7 @@ langchain4j:
   open-ai:
     streaming-chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-4o # gpt-4o is a custom model name for the OpenAI API
+      model-name: gpt-4o-mini
       log-requests: true
       log-responses: false
 pinecone:
