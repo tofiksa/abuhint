@@ -33,3 +33,10 @@ logging:
       ai4j.openai4j: DEBUG
     ai:
       djl: OFF
+resend:
+  api-key: ${RESEND_API_KEY}
+  api-url: https://api.resend.com
+  from: ${RESEND_FROM_EMAIL}
+  to: ${RESEND_TO_EMAIL}
+  subject: ${RESEND_SUBJECT}
+
