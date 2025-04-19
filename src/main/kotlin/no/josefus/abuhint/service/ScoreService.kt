@@ -40,7 +40,10 @@ class ScoreService(private val webClient: WebClient) {
         val logger = org.slf4j.LoggerFactory.getLogger(ScoreService::class.java)
         logger.info("Fetching game ID with access token: $accessToken")
 
-
+        if (accessToken.isNullOrEmpty()) {
+            logger.warn("Access token is null or empty")
+            return Mono.error(IllegalArgumentException("Access token is required"))
+        }
         return getGameId(accessToken)
                 .map { gameId ->
 

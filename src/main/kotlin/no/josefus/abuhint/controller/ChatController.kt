@@ -15,18 +15,11 @@ class ChatController(private val chatService: ChatService, private val scoreServ
     // Endpoint to start a chat session using the startChat function from ChatService
     @GetMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun startChat(
-        @RequestParam(required = false) chatId: String?,
-        @RequestParam(required = false) credentials: String?
+        @RequestParam(required = false) chatId: String?
     ): Flux<String> {
         return try {
             val effectiveChatId = chatId ?: UUID.randomUUID().toString()
             val responseFlux = chatService.startChat(effectiveChatId)
-            // get the game id from the high score service
-            val gameId = scoreService.fetchAndReturnGameId(credentials)
-            // logg the game id here
-            gameId.subscribe { id ->
-                println("Game ID: $id")
-            }
             responseFlux as Flux<String>
         } catch (e: Exception) {
             Flux.error(e)
@@ -38,10 +31,11 @@ class ChatController(private val chatService: ChatService, private val scoreServ
     @PostMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun sendMessage(
         @RequestParam(required = false) chatId: String?,
-        @RequestParam(required = false) credentials: String?,
+        @RequestParam(required = false) credentials : String?,
         @RequestBody message: MessageRequest
     ): Flux<String> {
         val gameId = scoreService.fetchAndReturnGameId(credentials)
+
         gameId.subscribe { id ->
             println("Game ID: $id")
         }
