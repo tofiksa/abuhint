@@ -25,7 +25,7 @@ class ScoreService(private val webClient: WebClient) {
             .bodyToMono<String>()
             .onErrorResume { e ->
                 // Log the error and return a fallback or propagate
-                println("Error retrieving game ID: ${e.message}")
+                //println("Error retrieving game ID: ${e.message}")
                 Mono.error(e)
             }
     }
@@ -38,7 +38,7 @@ class ScoreService(private val webClient: WebClient) {
      */
     fun fetchAndReturnGameId(accessToken: String?): Mono<String> {
         val logger = org.slf4j.LoggerFactory.getLogger(ScoreService::class.java)
-        logger.info("Fetching game ID with access token: $accessToken")
+        //logger.info("Fetching game ID with access token: $accessToken")
 
         if (accessToken.isNullOrEmpty()) {
             logger.warn("Access token is null or empty")
@@ -47,7 +47,7 @@ class ScoreService(private val webClient: WebClient) {
         return getGameId(accessToken)
                 .map { gameId ->
 
-                    logger.info("Retrieved game ID: $gameId")
+                    //logger.info("Retrieved game ID: $gameId")
                     gameId
                 }
     }

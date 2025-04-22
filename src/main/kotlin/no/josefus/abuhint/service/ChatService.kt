@@ -1,18 +1,21 @@
 package no.josefus.abuhint.service
 
-import dev.langchain4j.model.embedding.EmbeddingModel
+import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.service.TokenStream
-import no.josefus.abuhint.configuration.LangChain4jConfiguration
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.repository.LangChain4jAssistant
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
-class ChatService(private val assistant: LangChain4jAssistant,
-    private val langChain4jConfiguration: LangChain4jConfiguration
-    ) {
+class ChatService(
+    private val assistant: LangChain4jAssistant,
+    private val concretePineconeChatMemoryStore: ConcretePineconeChatMemoryStore
+) {
 
     // Function to start a chat session using the startConversation in LangChain4jAssistant
     fun startChat(chatId: String): TokenStream {
@@ -21,14 +24,45 @@ class ChatService(private val assistant: LangChain4jAssistant,
     }
 
     fun processChat(chatId: String, userMessage: String): TokenStream {
-
+        val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        return assistant.chat(chatId, userMessage, uuid)
+
+        // Retrieve relevant context from Pinecone
+        val relevantEmbeddingMatches =
+                concretePineconeChatMemoryStore.retrieveFromPinecone(chatId, userMessage)
+        val relevantMessages =
+                concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+
+        // Format relevant context
+        val contextBuilder = StringBuilder()
+        if (relevantMessages.isNotEmpty()) {
+            contextBuilder.append("Previous relevant conversation context:\n")
+            relevantMessages.forEach { message ->
+                when (message) {
+                    is UserMessage -> contextBuilder.append("User: ${message.text()}\n")
+                    is AiMessage -> contextBuilder.append("Assistant: ${message.text()}\n")
+                    is SystemMessage -> contextBuilder.append("System: ${message.text()}\n")
+                }
+            }
+            contextBuilder.append("\nCurrent conversation:\n")
+        }
+
+        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory")
+
+        // Combine context with current message
+        val enhancedMessage =
+                if (contextBuilder.isNotEmpty()) {
+                    "${contextBuilder}\nUser: $userMessage"
+                } else {
+                    userMessage
+                }
+
+        return assistant.chat(chatId, enhancedMessage, uuid)
     }
 
     /**
-     * Process a chat message and convert the TokenStream to a Flux
-     * with proper formatting (spacing, newlines, etc.)
+     * Process a chat message and convert the TokenStream to a Flux with proper formatting (spacing,
+     * newlines, etc.)
      */
     fun processChatAsFlux(chatId: String?, userMessage: String): Pair<String, Flux<String>> {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
@@ -38,7 +72,6 @@ class ChatService(private val assistant: LangChain4jAssistant,
         // Get token stream from the assistant
         val tokenStream = processChat(effectiveChatId, userMessage)
 
-
         logger.info("chatid: $effectiveChatId")
         logger.info("tokenStream: ${tokenStream.toString()}")
         // Flags to track formatting state
@@ -47,33 +80,30 @@ class ChatService(private val assistant: LangChain4jAssistant,
         val lastWasNewline = AtomicBoolean(false)
 
         // Convert to Flux with proper formatting
-        val flux = Flux.create { emitter ->
-            tokenStream.onNext { token ->
-                val formattedToken = formatToken(token, isFirstToken, needsSpace, lastWasNewline)
-                if (formattedToken.isNotEmpty()) {
-                    emitter.next(formattedToken)
+        val flux =
+                Flux.create { emitter ->
+                    tokenStream
+                            .onNext { token ->
+                                val formattedToken =
+                                        formatToken(token, isFirstToken, needsSpace, lastWasNewline)
+                                if (formattedToken.isNotEmpty()) {
+                                    emitter.next(formattedToken)
+                                }
+                            }
+                            .onComplete { emitter.complete() }
+                            .onError { error -> emitter.error(error) }
+                            .start()
                 }
-            }
-                .onComplete {
-                    emitter.complete()
-                }
-                .onError { error ->
-                    emitter.error(error)
-                }
-                .start()
-        }
 
         return Pair(effectiveChatId, flux)
     }
 
-    /**
-     * Format token with proper spacing and newlines
-     */
+    /** Format token with proper spacing and newlines */
     private fun formatToken(
-        token: String,
-        isFirstToken: AtomicBoolean,
-        needsSpace: AtomicBoolean,
-        lastWasNewline: AtomicBoolean
+            token: String,
+            isFirstToken: AtomicBoolean,
+            needsSpace: AtomicBoolean,
+            lastWasNewline: AtomicBoolean
     ): String {
         // Ignore empty tokens
         if (token.isBlank()) {
@@ -87,9 +117,11 @@ class ChatService(private val assistant: LangChain4jAssistant,
             formattedToken.append(token)
         } else {
             // Check if token starts with punctuation that doesn't need a leading space
-            val startsWithPunctuation = token.firstOrNull()?.let {
-                it in listOf(',', '.', '!', '?', ':', ';', ')', ']', '}', '\'', '"')
-            } ?: false
+            val startsWithPunctuation =
+                    token.firstOrNull()?.let {
+                        it in listOf(',', '.', '!', '?', ':', ';', ')', ']', '}', '\'', '"')
+                    }
+                            ?: false
 
             // Check if token contains newline
             val containsNewline = token.contains("\n")
@@ -106,9 +138,11 @@ class ChatService(private val assistant: LangChain4jAssistant,
         }
 
         // Determine if next token needs a space
-        val endsWithPunctuation = token.lastOrNull()?.let {
-            it in listOf(',', '.', '!', '?', ':', ';', '(', '[', '{', '\'', '"')
-        } ?: false
+        val endsWithPunctuation =
+                token.lastOrNull()?.let {
+                    it in listOf(',', '.', '!', '?', ':', ';', '(', '[', '{', '\'', '"')
+                }
+                        ?: false
 
         // Space needed if token doesn't end with punctuation or newline
         needsSpace.set(!endsWithPunctuation && !token.endsWith("\n"))

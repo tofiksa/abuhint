@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
-class LangChain4jConfiguration {
+public class LangChain4jConfiguration {
 
     @Value("\${pinecone.api-key}")
     lateinit var pinecone_api: String

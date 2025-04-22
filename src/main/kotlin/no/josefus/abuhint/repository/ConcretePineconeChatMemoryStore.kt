@@ -1,0 +1,80 @@
+package no.josefus.abuhint.repository
+
+import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.ChatMessage
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
+import dev.langchain4j.data.segment.TextSegment
+import dev.langchain4j.store.embedding.EmbeddingMatch
+import no.josefus.abuhint.configuration.LangChain4jConfiguration
+
+import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
+
+@Component
+class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfiguration) :
+        PineconeChatMemoryStore(langChain4jConfiguration) {
+
+    private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
+
+    /**
+     * Retrieves chat messages from Pinecone by performing a similarity search
+     * @param memoryId The identifier for the chat memory
+     * @param query The query text to search for similar messages
+     * @param maxResults Maximum number of results to return
+     * @return List of embedding matches containing text segments
+     */
+    fun retrieveFromPinecone(
+            memoryId: String,
+            query: String,
+            maxResults: Int = 5
+    ): List<EmbeddingMatch<TextSegment>> {
+        try {
+            val embeddingStore =
+                langChain4jConfiguration.embeddingStore(
+                            langChain4jConfiguration.embeddingModel(),
+                            memoryId
+                    )
+
+            // Generate embedding for the query
+            val embeddingModel = langChain4jConfiguration.embeddingModel()
+            val queryEmbedding = embeddingModel.embed(query).content()
+
+            // Perform similarity search in the embedding store
+            val searchResults = embeddingStore.findRelevant(queryEmbedding, maxResults)
+
+            logger.info("Retrieved ${searchResults.size} messages from Pinecone for ID: $memoryId")
+            return searchResults
+        } catch (e: Exception) {
+            logger.error("Failed to retrieve chat memory from Pinecone: ${e.message}", e)
+            return emptyList()
+        }
+    }
+
+    /** Converts search results to chat messages */
+    fun parseResultsToMessages(segments: List<EmbeddingMatch<TextSegment>>): List<ChatMessage> {
+
+        fun parseLineToChatMessage(line: String): ChatMessage? {
+            val parts = line.split(": ", limit = 2)
+            if (parts.size == 2 && parts[1].isNotBlank()) {
+                return when (parts[0]) {
+                    "USER" -> UserMessage(parts[1])
+                    "AI" -> AiMessage(parts[1])
+                    "SYSTEM" -> SystemMessage(parts[1])
+                    else -> null
+                }
+            }
+            return null
+        }
+
+        fun convertSegmentToChatMessages(segment: TextSegment): List<ChatMessage> {
+            return segment.text().split("\n")
+                .filter { it.isNotBlank() }
+                .mapNotNull { line -> parseLineToChatMessage(line) }
+        }
+
+        return segments.flatMap { embeddingMatch ->
+            convertSegmentToChatMessages(embeddingMatch.embedded())
+        }
+    }
+}

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
-class PineconeChatMemoryStore(private val langChain4jConfiguration: LangChain4jConfiguration) : ChatMemoryStore {
+abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4jConfiguration) : ChatMemoryStore {
     private val logger = LoggerFactory.getLogger(PineconeChatMemoryStore::class.java)
 
     // Cache for better performance and to reduce API calls
@@ -53,4 +53,6 @@ class PineconeChatMemoryStore(private val langChain4jConfiguration: LangChain4jC
         // You would need to implement deletion from Pinecone as well
         logger.info("Deleted chat memory for ID: $id")
     }
+
+
 }
