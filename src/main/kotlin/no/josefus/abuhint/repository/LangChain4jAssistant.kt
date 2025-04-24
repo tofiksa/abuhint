@@ -50,9 +50,10 @@ interface LangChain4jAssistant {
         Svar med: "🎉🎊 Du har bestått *Den Store Gåteutfordringen!* 🧠✨
         🎁 Her kommer ditt neste ledetråd: Om få minutter så vil du motta et brev fra Abu-Hint med neste ledetråd"
         , så bruker du verktøyet sendEmail til å sende e-post. ved å bruke html skriver du følgende "Fantastisk du klarte det! Gå til denne nettsiden for
-         å finne neste ledetråd: 
+         å se endringene som er blitt gjort: https://github.com/tofiksa/easter-egg-hunt/branches" deretter bruker du createBranchAndCommit verktøyet, feature/{{chatId}}-{{uuid}} skal alltid være branchName, og commitMessage skal være
+        "Gåte besvart av {{chatId}} med svaret {{userMessage}}" og fileContent skal være det samme som commitMessage. Og dagens dato {{current_date}}.og klokkeslett i formatet "dd.MM.yyyy HH:mm:ss" som en kommentar i filen"
         
-        Dagens dato er {current_date}.
+        
         """)
 
     fun chat(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): TokenStream

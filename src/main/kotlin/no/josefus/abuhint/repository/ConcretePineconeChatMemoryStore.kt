@@ -27,7 +27,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
     fun retrieveFromPinecone(
             memoryId: String,
             query: String,
-            maxResults: Int = 5
+            maxResults: Int = 10
     ): List<EmbeddingMatch<TextSegment>> {
         try {
             val embeddingStore =
@@ -39,6 +39,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             // Generate embedding for the query
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
+
 
             // Perform similarity search in the embedding store
             val searchResults = embeddingStore.findRelevant(queryEmbedding, maxResults)
@@ -55,7 +56,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
     fun parseResultsToMessages(segments: List<EmbeddingMatch<TextSegment>>): List<ChatMessage> {
 
         fun parseLineToChatMessage(line: String): ChatMessage? {
-            val parts = line.split(": ", limit = 2)
+            val parts = line.split(": ", limit = 10)
             if (parts.size == 2 && parts[1].isNotBlank()) {
                 return when (parts[0]) {
                     "USER" -> UserMessage(parts[1])

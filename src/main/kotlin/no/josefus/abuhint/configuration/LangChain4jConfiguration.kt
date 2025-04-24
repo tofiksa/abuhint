@@ -34,7 +34,7 @@ public class LangChain4jConfiguration {
     fun embeddingModel(): EmbeddingModel {
         return OpenAiEmbeddingModel.builder()
             .apiKey(openaiapikey)
-            .modelName("text-embedding-3-small")
+            .modelName("text-embedding-ada-002")
             .build()
     }
 

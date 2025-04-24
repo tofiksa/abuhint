@@ -36,9 +36,6 @@ class ChatController(private val chatService: ChatService, private val scoreServ
     ): Flux<String> {
         val gameId = scoreService.fetchAndReturnGameId(credentials)
 
-        gameId.subscribe { id ->
-            println("Game ID: $id")
-        }
         val (effectiveChatId, responseFlux) = chatService.processChatAsFlux(chatId, message.message)
         return responseFlux
     }

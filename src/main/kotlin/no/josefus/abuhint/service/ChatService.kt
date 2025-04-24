@@ -33,6 +33,8 @@ class ChatService(
         val relevantMessages =
                 concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
 
+        logger.info("Relevant messages: $relevantMessages")
+
         // Format relevant context
         val contextBuilder = StringBuilder()
         if (relevantMessages.isNotEmpty()) {
@@ -57,7 +59,7 @@ class ChatService(
                     userMessage
                 }
 
-        return assistant.chat(chatId, enhancedMessage, uuid)
+        return assistant.chat(chatId, userMessage, uuid)
     }
 
     /**

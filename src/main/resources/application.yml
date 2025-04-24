@@ -21,7 +21,7 @@ langchain4j:
   open-ai:
     streaming-chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-4o-mini
+      model-name: gpt-4.1-mini
       log-requests: true
       log-responses: false
 pinecone:
