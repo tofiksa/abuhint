@@ -12,21 +12,6 @@ import java.util.UUID
 @RequestMapping("/api/chat")
 class ChatController(private val chatService: ChatService, private val scoreService: ScoreService) {
 
-    // Endpoint to start a chat session using the startChat function from ChatService
-    @GetMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
-    fun startChat(
-        @RequestParam(required = false) chatId: String?
-    ): Flux<String> {
-        return try {
-            val effectiveChatId = chatId ?: UUID.randomUUID().toString()
-            val responseFlux = chatService.startChat(effectiveChatId)
-            responseFlux as Flux<String>
-        } catch (e: Exception) {
-            Flux.error(e)
-        }
-    }
-
-
 
     @PostMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun sendMessage(

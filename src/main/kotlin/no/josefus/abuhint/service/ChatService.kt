@@ -17,17 +17,11 @@ class ChatService(
     private val concretePineconeChatMemoryStore: ConcretePineconeChatMemoryStore
 ) {
 
-    // Function to start a chat session using the startConversation in LangChain4jAssistant
-    fun startChat(chatId: String): TokenStream {
-        val uuid = UUID.randomUUID().toString()
-        return assistant.startConversation(chatId, uuid)
-    }
-
     fun processChat(chatId: String, userMessage: String): TokenStream {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
 
-        // Retrieve relevant context from Pinecone
+        /*
         val relevantEmbeddingMatches =
                 concretePineconeChatMemoryStore.retrieveFromPinecone(chatId, userMessage)
         val relevantMessages =
@@ -57,7 +51,7 @@ class ChatService(
                     "${contextBuilder}\nUser: $userMessage"
                 } else {
                     userMessage
-                }
+                }*/
 
         return assistant.chat(chatId, userMessage, uuid)
     }
