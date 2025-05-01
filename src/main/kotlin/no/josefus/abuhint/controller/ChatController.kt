@@ -1,5 +1,7 @@
 package no.josefus.abuhint.controller
 
+import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
+import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
 import no.josefus.abuhint.service.ChatService
 import no.josefus.abuhint.service.ScoreService
 import org.springframework.http.MediaType
@@ -13,29 +15,30 @@ import java.util.UUID
 class ChatController(private val chatService: ChatService, private val scoreService: ScoreService) {
 
 
-    @PostMapping(value = ["/send"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    @PostMapping(value = ["/send"], produces = [MediaType.APPLICATION_JSON_VALUE])
     fun sendMessage(
-        @RequestParam(required = false) chatId: String?,
+        @RequestParam(required = false) chatId: String,
         @RequestParam(required = false) credentials : String?,
         @RequestBody message: MessageRequest
-    ): Flux<String> {
+    ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val gameId = scoreService.fetchAndReturnGameId(credentials)
 
-        val (effectiveChatId, responseFlux) = chatService.processChatAsFlux(chatId, message.message)
-        return responseFlux
+        val message = chatService.processChat(chatId, message.message)
+        val contentItems = List(1) {
+            OpenAiCompatibleContentItem(
+                type = "text",
+                text = message,
+            )
+        }
+
+        OpenAiCompatibleChatMessage (
+            role = "assistant",
+            content = contentItems,
+        )
+        return ResponseEntity.ok(contentItems)
     }
 
-    // If you need to expose the chat ID to the client, you could use this approach instead:
-    @PostMapping("/send-with-id")
-    fun sendMessageWithId(
-        @RequestParam(required = false) chatId: String?,
-        @RequestBody message: MessageRequest
-    ): ResponseEntity<ChatResponse> {
-        val (effectiveChatId, responseFlux) = chatService.processChatAsFlux(chatId, message.message)
-        return ResponseEntity.ok(ChatResponse(effectiveChatId, responseFlux))
-    }
 
     data class MessageRequest(val message: String)
 
-    data class ChatResponse(val chatId: String, val stream: Flux<String>)
 }

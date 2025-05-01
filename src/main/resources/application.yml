@@ -19,7 +19,7 @@ spring:
 # LangChain4j properties
 langchain4j:
   open-ai:
-    streaming-chat-model:
+    chat-model:
       api-key: ${EASTER_API_KEY}
       model-name: o4-mini-2025-04-16
       log-requests: true

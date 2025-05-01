@@ -25,7 +25,7 @@ public class LangChain4jConfiguration {
     @Value("\${pinecone.api-key}")
     lateinit var pinecone_api: String
 
-    @Value("\${langchain4j.open-ai.streaming-chat-model.api-key}")
+    @Value("\${langchain4j.open-ai.chat-model.api-key}")
     lateinit var openaiapikey: String
 
 
