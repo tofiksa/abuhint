@@ -1,5 +1,4 @@
 # AbuHint: Your AI-Powered Assistant
-# AbuHint: Your AI-Powered Assistant
 
 <img src="assets/Abu-hint-coach.png" alt="AbuHint Logo" width="400" />
 
