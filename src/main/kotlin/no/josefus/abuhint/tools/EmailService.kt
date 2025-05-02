@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component
 class EmailService (
                      @Value("\${resend.api-key}") private val apiKey: String,
                      @Value("\${resend.from}") private val from: String,
-                     @Value("\${resend.to}") private val to: String,
                      @Value("\${resend.subject}") private val subject: String ){
 
     private val logger: Logger = LoggerFactory.getLogger(EmailService::class.java)
@@ -25,7 +24,7 @@ class EmailService (
      * @param html The HTML content of the email.
      */
     @Tool(name = "sendEmail")
-    fun sendEmail(html: String) {
+    fun sendEmail(html: String, to: String){
         val params = CreateEmailOptions.builder()
             .from(from)
             .to(to)
