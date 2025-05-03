@@ -1,5 +1,6 @@
 package no.josefus.abuhint.repository
 
+import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
 
@@ -26,4 +27,6 @@ interface LangChain4jAssistant {
 
     fun chat(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): String
     fun chatStream(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): TokenStream
+
+
 }
