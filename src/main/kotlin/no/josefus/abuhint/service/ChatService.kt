@@ -1,6 +1,7 @@
 package no.josefus.abuhint.service
 
 import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.model.Tokenizer
@@ -24,7 +25,7 @@ class ChatService(
         val tokenizer = this.tokenizer
 
         val relevantEmbeddingMatches =
-            concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(
+            retrieveRelevantContext(
                 chatId, userMessage, maxContextTokens, tokenizer
             )
         val relevantMessages =
@@ -32,48 +33,65 @@ class ChatService(
 
         logger.info("Relevant messages: $relevantMessages")
 
-        // Format relevant context
-        val contextBuilder = StringBuilder()
-        if (relevantMessages.isNotEmpty()) {
-            contextBuilder.append("Previous relevant conversation context:\n")
-            relevantMessages.forEach { message ->
-                when (message) {
-                    is UserMessage -> contextBuilder.append("User: ${message.text()}\n")
-                    is AiMessage -> contextBuilder.append("Assistant: ${message.text()}\n")
-                    is SystemMessage -> contextBuilder.append("System: ${message.text()}\n")
-                }
-            }
-            contextBuilder.append("\nCurrent conversation:\n")
-        }
 
         logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory")
 
         // Combine context with current message
         val enhancedMessage =
-            if (contextBuilder.isNotEmpty()) {
-                "${contextBuilder}\nUser: $userMessage"
-            } else {
-                userMessage
-            }
+            formatMessagesToContext(relevantMessages)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCountInText(enhancedMessage)
         logger.info("Total tokens in message: $totalTokens")
+        // Better context trimming
         if (totalTokens > maxContextTokens) {
-            // Trim the context to fit within the token limit
-            val contextTokens = tokenizer.estimateTokenCountInText(contextBuilder.toString())
-            val excessTokens = totalTokens - maxContextTokens
-            if (contextTokens > excessTokens) {
-                val trimmedContext = contextBuilder.toString().take(contextBuilder.length - excessTokens)
-                logger.warn("Context trimmed to fit within token limit")
-                return assistant.chat(chatId, "$trimmedContext\nUser: $userMessage", uuid)
-            } else {
-                logger.error("Message exceeds token limit even after trimming context")
-                throw IllegalArgumentException("Message exceeds token limit")
+            // Instead of just taking characters, prioritize keeping complete messages
+            // Split into message units
+            val messages = relevantMessages.toList()
+            val trimmedMessages = mutableListOf<ChatMessage>()
+            var currentTokenCount = tokenizer.estimateTokenCountInText(userMessage)
+
+            for (message in messages) {
+                val messageTokens = tokenizer.estimateTokenCountInText(message.text())
+                if (currentTokenCount + messageTokens <= maxContextTokens) {
+                    trimmedMessages.add(message)
+                    currentTokenCount += messageTokens
+                } else {
+                    break
+                }
             }
+
+            // Rebuild context with only the messages that fit
+            val trimmedContext = formatMessagesToContext(trimmedMessages)
+            return assistant.chat(chatId, "$trimmedContext\nUser: $userMessage", uuid)
+        }
+        return assistant.chat(chatId, "$enhancedMessage\nUser: $userMessage", uuid)
+
+    }
+
+
+        private fun formatMessagesToContext(messages: List<ChatMessage>): String {
+            val contextBuilder = StringBuilder()
+            if (messages.isNotEmpty()) {
+                contextBuilder.append("Previous relevant conversation context:\n")
+                messages.forEach { message ->
+                    when (message) {
+                        is UserMessage -> contextBuilder.append("User: ${message.text()}\n")
+                        is AiMessage -> contextBuilder.append("Assistant: ${message.text()}\n")
+                        is SystemMessage -> contextBuilder.append("System: ${message.text()}\n")
+                    }
+                }
+                contextBuilder.append("\nCurrent conversation:\n")
+            }
+            return contextBuilder.toString()
         }
 
-        return assistant.chat(chatId, enhancedMessage, uuid)
-    }
+
+    fun retrieveRelevantContext(
+        memoryId: String,
+        query: String,
+        maxTokens: Int,
+        tokenizer: Tokenizer
+    ) = concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
 
 }
