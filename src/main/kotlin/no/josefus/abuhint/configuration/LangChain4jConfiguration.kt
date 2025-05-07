@@ -60,7 +60,7 @@ public class LangChain4jConfiguration {
         tokenizer: Tokenizer,
         chatMemoryStore: ConcretePineconeChatMemoryStore
     ): ChatMemoryProvider {
-        val maxMessages = 5
+        val maxMessages = 10
 
         return ChatMemoryProvider { chatId ->
             val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
