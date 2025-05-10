@@ -18,41 +18,6 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
 
     private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
 
-    /**
-     * Retrieves chat messages from Pinecone by performing a similarity search
-     * @param memoryId The identifier for the chat memory
-     * @param query The query text to search for similar messages
-     * @param maxResults Maximum number of results to return
-     * @return List of embedding matches containing text segments
-     */
-    fun retrieveFromPinecone(
-            memoryId: String,
-            query: String,
-            maxResults: Int = 100
-    ): List<EmbeddingMatch<TextSegment>> {
-        try {
-            val embeddingStore =
-                langChain4jConfiguration.embeddingStore(
-                            langChain4jConfiguration.embeddingModel(),
-                            memoryId
-                    )
-
-            // Generate embedding for the query
-            val embeddingModel = langChain4jConfiguration.embeddingModel()
-            val queryEmbedding = embeddingModel.embed(query).content()
-
-
-            // Perform similarity search in the embedding store
-            val searchResults = embeddingStore.findRelevant(queryEmbedding, maxResults)
-
-            logger.info("Retrieved ${searchResults.size} messages from Pinecone for ID: $memoryId")
-            return searchResults
-        } catch (e: Exception) {
-            logger.error("Failed to retrieve chat memory from Pinecone: ${e.message}", e)
-            return emptyList()
-        }
-    }
-
     fun retrieveFromPineconeWithTokenLimit(
         memoryId: String,
         query: String,

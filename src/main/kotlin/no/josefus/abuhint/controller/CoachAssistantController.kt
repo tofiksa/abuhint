@@ -3,7 +3,7 @@ package no.josefus.abuhint.controller
 import no.josefus.abuhint.dto.ChatRequest
 import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
-import no.josefus.abuhint.repository.CoachAssistantService
+import no.josefus.abuhint.service.ChatService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -15,7 +15,7 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/coach")
 class CoachAssistantController(
-    private val coachAssistantService: CoachAssistantService
+    private val chatService: ChatService,
 ) {
 
     @PostMapping("/chat")
@@ -24,7 +24,7 @@ class CoachAssistantController(
         @RequestBody message: ChatRequest
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val uuid = UUID.randomUUID().toString()
-        val message = coachAssistantService.chat(chatId, message.message, uuid)
+        val message = chatService.processChat(chatId, message.message)
         val contentItems = List(1) {
             OpenAiCompatibleContentItem(
                 type = "text",

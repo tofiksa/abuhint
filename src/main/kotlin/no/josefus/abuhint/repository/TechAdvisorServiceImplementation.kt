@@ -1,8 +1,6 @@
-package no.josefus.abuhint.service.impl
+package no.josefus.abuhint.repository
 
 import org.springframework.stereotype.Service
-import no.josefus.abuhint.repository.TechAdvisorAssistant
-import no.josefus.abuhint.repository.TechAdvisorService
 
 @Service
 class TechAdvisorServiceImpl(

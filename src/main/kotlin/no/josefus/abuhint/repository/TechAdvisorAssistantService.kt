@@ -1,6 +1,5 @@
 package no.josefus.abuhint.repository
 
-import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
 

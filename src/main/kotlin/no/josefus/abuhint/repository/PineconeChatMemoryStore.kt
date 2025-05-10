@@ -50,7 +50,7 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
     override fun deleteMessages(memoryId: Any) {
         val id = memoryId.toString()
         memoryCache.remove(id)
-        // You would need to implement deletion from Pinecone as well
+
         logger.info("Deleted chat memory for ID: $id")
     }
 

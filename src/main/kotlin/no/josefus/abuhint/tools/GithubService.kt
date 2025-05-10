@@ -2,7 +2,6 @@ package no.josefus.abuhint.tools
 
 import dev.langchain4j.agent.tool.Tool
 import org.kohsuke.github.GitHub
-import org.kohsuke.github.GHRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 

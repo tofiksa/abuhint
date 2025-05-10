@@ -22,7 +22,7 @@ langchain4j:
     chat-model:
       api-key: ${EASTER_API_KEY}
       model-name: gpt-4.1-mini
-      log-requests: true
+      log-requests: false
       log-responses: false
       temperature: 1
       max_completion_tokens: 12000
@@ -34,8 +34,8 @@ pinecone:
 logging:
   level:
     dev:
-      langchain4j: DEBUG
-      ai4j.openai4j: DEBUG
+      langchain4j: ERROR
+      ai4j.openai4j: ERROR
     ai:
       djl: OFF
 resend:
