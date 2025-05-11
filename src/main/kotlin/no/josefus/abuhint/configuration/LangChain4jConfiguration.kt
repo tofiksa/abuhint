@@ -34,7 +34,6 @@ public class LangChain4jConfiguration {
             .build()
     }
 
-
     fun embeddingStore(embeddingModel: EmbeddingModel, id: String): EmbeddingStore<TextSegment> {
         val effectiveNamespace = id.ifEmpty { "startup" }
 
@@ -53,7 +52,6 @@ public class LangChain4jConfiguration {
                 .build()
         }
     }
-
 
     @Bean
     fun chatMemoryProvider(

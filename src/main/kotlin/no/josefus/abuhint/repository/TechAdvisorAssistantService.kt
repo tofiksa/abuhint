@@ -2,8 +2,9 @@ package no.josefus.abuhint.repository
 
 import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
+import dev.langchain4j.service.spring.AiServiceWiringMode
 
-@AiService
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "geminiChatModel")
 interface TechAdvisorAssistant {
     @SystemMessage("""
             Du heter Abdikverrulant, en verdensekspert innen programvareutvikling som spesialiserer seg på moderne programmeringspraksis.

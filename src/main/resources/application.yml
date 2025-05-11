@@ -22,22 +22,27 @@ langchain4j:
     chat-model:
       api-key: ${EASTER_API_KEY}
       model-name: gpt-4.1-mini
-      log-requests: false
-      log-responses: false
+      log-requests: true
+      log-responses: true
       temperature: 1
       max_completion_tokens: 12000
       top-p: 1.0
       frequency-penalty: 0.0
       presence-penalty: 0.0
+  gemini:
+    api-key: ${GEMINIAI_API_KEY} # Hent nøkkelen fra en miljøvariabel
+    project-id: ${GCP_PROJECT_ID} # Hent Google Cloud Project ID fra miljøvariabel
+    location: ${GCP_LOCATION} # Hent Google Cloud Lokasjon (f.eks. "us-central1") fra miljøvariabel
+    model-name: gemini-2.0-flash
 pinecone:
   api-key: ${PINECONE_API_KEY}
 logging:
   level:
     dev:
-      langchain4j: ERROR
-      ai4j.openai4j: ERROR
+      langchain4j: DEBUG
+      ai4j.openai4j: DEBUG
     ai:
-      djl: OFF
+      djl: DEBUG
 resend:
   api-key: ${RESEND_API_KEY}
   api-url: https://api.resend.com

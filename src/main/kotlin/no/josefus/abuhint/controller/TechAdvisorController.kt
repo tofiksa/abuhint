@@ -22,7 +22,7 @@ class TechAdvisorController(
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
 
         val uuid = UUID.randomUUID().toString()
-        val message = chatService.processChat(chatId, message.message)
+        val message = chatService.processGeminiChat(chatId, message.message)
         val contentItems = List(1) {
             OpenAiCompatibleContentItem(
                 type = "text",

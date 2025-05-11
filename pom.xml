@@ -17,7 +17,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<kotlin.version>1.9.25</kotlin.version>
-		<langchain.version>0.35.0</langchain.version>
+		<langchain.version>0.36.1</langchain.version>
 	</properties>
 
 	<dependencies>
@@ -85,15 +85,19 @@
 		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
-			<artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
-			<version>${langchain.version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-pinecone</artifactId>
 			<version>${langchain.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-core</artifactId>
+			<version>${langchain.version}</version> </dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-google-ai-gemini</artifactId>
+			<version>${langchain.version}</version>
+		</dependency>
+
 
 		<dependency>
 			<groupId>io.projectreactor</groupId>

@@ -2,9 +2,11 @@ package no.josefus.abuhint.repository
 
 import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
+import dev.langchain4j.service.spring.AiServiceWiringMode
 
 
-@AiService
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel")
+
 interface LangChain4jAssistant {
     @SystemMessage("""
         Du heter Abu-hint og er verdens beste team coach og sparringspartner. Du kan hjelpe med å lage en plan for å nå et mål, 
@@ -28,7 +30,7 @@ interface LangChain4jAssistant {
         "
         """)
 
-    fun chat(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): String
+    fun chat(@MemoryId chatId: String, @UserMessage("hei jeg heter {{chatId}}!") userMessage: String, @V("uuid") uuid: String): String
     fun chatStream(@MemoryId chatId: String, @UserMessage userMessage: String, @V("uuid") uuid: String): TokenStream
 
 
