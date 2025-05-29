@@ -10,6 +10,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
+import no.josefus.abuhint.tools.EmailService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -56,9 +57,9 @@ public class LangChain4jConfiguration {
     @Bean
     fun chatMemoryProvider(
         tokenizer: Tokenizer,
-        chatMemoryStore: ConcretePineconeChatMemoryStore
+        chatMemoryStore: ConcretePineconeChatMemoryStore,
     ): ChatMemoryProvider {
-        val maxMessages = 10
+        val maxMessages = 100
 
         return ChatMemoryProvider { chatId ->
             val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
@@ -71,5 +72,13 @@ public class LangChain4jConfiguration {
                 .build()
         }
     }
-}
 
+    @Bean
+    fun emailService(
+        @Value("\${resend.api-key}") apiKey: String,
+        @Value("\${resend.from}") from: String,
+        @Value("\${resend.subject}") subject: String = "Abuhint Notification"
+    ): EmailService {
+        return EmailService(apiKey, from, subject)
+    }
+}

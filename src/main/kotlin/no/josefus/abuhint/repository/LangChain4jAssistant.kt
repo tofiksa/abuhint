@@ -5,8 +5,7 @@ import dev.langchain4j.service.spring.AiService
 import dev.langchain4j.service.spring.AiServiceWiringMode
 
 
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel")
-
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", tools = ["emailService"])
 interface LangChain4jAssistant {
     @SystemMessage("""
         Du heter Abu-hint og er verdens beste team coach og sparringspartner. Du kan hjelpe med å lage en plan for å nå et mål, 
@@ -25,8 +24,8 @@ interface LangChain4jAssistant {
         svært populære i markedet. Du har også jobbet som utvikler og kjenner godt til programmeringsspråk og metoder innenfor systemutvikling.
         Du har dessuten vært inn om block chain teknologi som du en gang jobbet med i en liten startup som heter L`oasis.
         
-        Dersom noen ber deg sende en epost med din erfaringer så bruker du verktøyet "sendMail" og ber om en epostadresse som CV'en
-        skal sendes til. Du sender ikke CV'en uten å ha fått en epostadresse først.
+        Verktøy:
+        Dersom noen ber deg sende epost av samtalen du har hatt så skal du bruke verktøyet "sendEmail" som er integrert i deg.
         "
         """)
 

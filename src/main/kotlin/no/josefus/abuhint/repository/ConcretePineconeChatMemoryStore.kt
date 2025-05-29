@@ -33,7 +33,15 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            val searchResults = embeddingStore.findRelevant(queryEmbedding, 100)
+            val searchResults = embeddingStore.findRelevant(
+                queryEmbedding,5, 0.75
+
+                /*dev.langchain4j.store.embedding.FindRequest.builder()
+                    .embedding(queryEmbedding)
+                    .maxResults(100)
+                    .minScore(0.0)
+                    .build()*/
+            )
 
             var tokenCount = 0
             val limitedResults = mutableListOf<EmbeddingMatch<TextSegment>>()

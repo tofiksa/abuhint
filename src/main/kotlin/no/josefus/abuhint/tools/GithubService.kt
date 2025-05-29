@@ -138,7 +138,7 @@ class GitHubService(
     }
 
     // push to the main branch
-    @Tool(name = "pushToMain")
+    @Tool(name = "pushToMain", value= ["Push to main branch"])
     fun pushToMain(branchName: String): String {
         try {
             // Log the start of the push process

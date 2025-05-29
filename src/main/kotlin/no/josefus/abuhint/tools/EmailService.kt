@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 class EmailService (
                      @Value("\${resend.api-key}") private val apiKey: String,
                      @Value("\${resend.from}") private val from: String,
-                     @Value("\${resend.subject}") private val subject: String ){
+                     @Value("\${resend.subject}") private val subject: String = "Abuhint Notification"){
 
     private val logger: Logger = LoggerFactory.getLogger(EmailService::class.java)
     private val resend = Resend(apiKey)
