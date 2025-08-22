@@ -11,6 +11,7 @@ import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.tools.EmailService
+import no.josefus.abuhint.tools.PowerPointGeneratorTool
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -80,5 +81,10 @@ public class LangChain4jConfiguration {
         @Value("\${resend.subject}") subject: String = "Abuhint Notification"
     ): EmailService {
         return EmailService(apiKey, from, subject)
+    }
+
+    @Bean
+    fun powerPointTool(): PowerPointGeneratorTool {
+        return PowerPointGeneratorTool()
     }
 }

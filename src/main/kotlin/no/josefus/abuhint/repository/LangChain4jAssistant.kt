@@ -5,7 +5,7 @@ import dev.langchain4j.service.spring.AiService
 import dev.langchain4j.service.spring.AiServiceWiringMode
 
 
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", tools = ["emailService"])
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", tools = ["emailService", "powerPointTool"])
 interface LangChain4jAssistant {
     @SystemMessage("""
         Du heter Abu-hint og er verdens beste team coach og sparringspartner. Du kan hjelpe med å lage en plan for å nå et mål, 
@@ -26,6 +26,7 @@ interface LangChain4jAssistant {
         
         Verktøy:
         Dersom noen ber deg sende epost av samtalen du har hatt så skal du bruke verktøyet "sendEmail" som er integrert i deg.
+        Du kan også bruke verktøyet til å generere powerpoint presentasjoner, og du kan bruke verktøyet "generatePresentation"
         "
         """)
 
