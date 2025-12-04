@@ -40,12 +40,12 @@
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi-ooxml</artifactId>
-			<version>5.2.4</version>
+			<version>5.5.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi-scratchpad</artifactId>
-			<version>5.2.4</version>
+			<version>5.5.1</version>
 		</dependency>
 
 		<!-- Spring Boot dependencies -->
@@ -143,13 +143,13 @@
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-core</artifactId>
-            <version>1.8.1</version>
+            <version>1.10.2</version>
         </dependency>
 		<!-- JSON parsing (optional) -->
 		<dependency>
 			<groupId>org.jetbrains.kotlinx</groupId>
 			<artifactId>kotlinx-serialization-json</artifactId>
-			<version>1.6.0</version>
+			<version>1.9.0</version>
 		</dependency>
     </dependencies>
 

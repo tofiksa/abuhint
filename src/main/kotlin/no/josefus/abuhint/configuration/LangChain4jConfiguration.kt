@@ -9,7 +9,6 @@ import no.josefus.abuhint.service.SimpleTokenizer
 import no.josefus.abuhint.service.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
-import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.tools.EmailService
 import no.josefus.abuhint.tools.PowerPointGeneratorTool
@@ -42,17 +41,12 @@ public class LangChain4jConfiguration {
         val effectiveNamespace = id.ifEmpty { "startup" }
 
         return embeddingStoreCache.computeIfAbsent(effectiveNamespace) {
-            val indexConfig = PineconeServerlessIndexConfig.builder()
-                .cloud("AWS")
-                .region("us-east-1")
-                .dimension(embeddingModel.dimension())
-                .build()
-
+            // Note: createIndex() is removed to avoid missing dependency issue with org.openapitools.db_control.client
+            // The index should already exist in Pinecone. If not, create it manually via Pinecone console or API.
             PineconeEmbeddingStore.builder()
                 .apiKey(pinecone_api)
                 .index("paaskeeggjakt")
                 .nameSpace(effectiveNamespace)
-                .createIndex(indexConfig)
                 .build()
         }
     }
