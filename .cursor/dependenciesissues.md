@@ -95,34 +95,32 @@ This document tracks all breaking changes, deprecated APIs, and required refacto
 ### Issue: POI API Changes
 - **Library**: poi-ooxml, poi-scratchpad
 - **Current Version**: 5.2.4
-- **Target Version**: Latest (TBD - check for 5.3.x or 6.x)
+- **Target Version**: 5.5.1 ✅ **COMPLETED**
 - **Severity**: MEDIUM
 - **Impact**: PowerPoint generation functionality
-- **Potential Breaking Changes**:
-  - `XMLSlideShow` constructor or methods might change
-  - `TextParagraph` API might be updated
-  - Shape creation methods might change
-  - Color handling might be updated
+- **Status**: ✅ **RESOLVED** - No breaking changes detected in XSLF (PowerPoint) API
+- **Breaking Changes**: None - XSLF API is backward compatible
 - **Refactoring Tasks**:
-  - [ ] Review Apache POI changelog for breaking changes
-  - [ ] Update `XMLSlideShow` usage in `PowerPointGeneratorTool.kt`
-  - [ ] Verify `TextParagraph` API compatibility
-  - [ ] Check `createTextBox()` method signature
-  - [ ] Verify `TextRun` API (`setText`, `fontSize`, `isBold`, `setFontColor`)
-  - [ ] Test all slide types:
-    - Title slides
-    - Title and content slides
-    - Bullet point slides
-    - Content-only slides
-  - [ ] Verify file output format compatibility
+  - [x] Review Apache POI changelog for breaking changes
+  - [x] Update `XMLSlideShow` usage in `PowerPointGeneratorTool.kt` - No changes needed
+  - [x] Verify `TextParagraph` API compatibility - Compatible
+  - [x] Check `createTextBox()` method signature - Compatible
+  - [x] Verify `TextRun` API (`setText`, `fontSize`, `isBold`, `setFontColor`) - Compatible
+  - [x] Test all slide types:
+    - Title slides - ✅ Working
+    - Title and content slides - ✅ Working
+    - Bullet point slides - ✅ Working
+    - Content-only slides - ✅ Working
+  - [x] Verify file output format compatibility - ✅ Compatible
 - **Files Affected**:
-  - `pom.xml`
-  - `src/main/kotlin/no/josefus/abuhint/tools/PowerPointGeneratorTool.kt`
+  - `pom.xml` - ✅ Updated to 5.5.1
+  - `src/main/kotlin/no/josefus/abuhint/tools/PowerPointGeneratorTool.kt` - ✅ No changes needed
 - **Testing Requirements**:
-  - [ ] Test presentation generation
-  - [ ] Test all slide types
-  - [ ] Verify PowerPoint files open correctly
-  - [ ] Test with various content lengths
+  - [x] Test presentation generation - ✅ All tests pass
+  - [x] Test all slide types - ✅ Verified
+  - [x] Verify PowerPoint files open correctly - ✅ Compatible
+  - [x] Test with various content lengths - ✅ Working
+- **Notes**: XSLF (PowerPoint) API remained stable. Breaking changes mentioned in migration guide apply to HSSF/XSSF (Excel) APIs, not XSLF.
 
 ---
 
@@ -131,43 +129,39 @@ This document tracks all breaking changes, deprecated APIs, and required refacto
 ### Issue: Kotlinx Coroutines API Changes
 - **Library**: kotlinx-coroutines-core
 - **Current Version**: 1.8.1
-- **Target Version**: Latest (TBD - likely 1.9.x or 2.x)
+- **Target Version**: 1.10.2 ✅ **COMPLETED**
 - **Severity**: MEDIUM
 - **Impact**: Any async/reactive code using coroutines
-- **Potential Breaking Changes**:
-  - Coroutine builder API changes
-  - Flow API changes
-  - Exception handling changes
+- **Status**: ✅ **RESOLVED** - No breaking changes detected, no direct coroutine usage found
+- **Breaking Changes**: None detected - backward compatible
 - **Refactoring Tasks**:
-  - [ ] Search codebase for coroutine usage (`suspend`, `launch`, `async`, `Flow`)
-  - [ ] Review kotlinx-coroutines migration guide
-  - [ ] Update any deprecated coroutine APIs
-  - [ ] Test async operations
-- **Files Affected**: All files using coroutines (TBD - need to search)
-- **Note**: May not be directly used - check if Spring WebFlux handles async operations
+  - [x] Search codebase for coroutine usage (`suspend`, `launch`, `async`, `Flow`) - No direct usage found
+  - [x] Review kotlinx-coroutines migration guide - No migration needed
+  - [x] Update any deprecated coroutine APIs - N/A
+  - [x] Test async operations - ✅ All tests pass
+- **Files Affected**: None - No direct coroutine usage in codebase (using Reactor/Mono instead)
+- **Note**: Project uses Spring WebFlux with Reactor for async operations, not direct coroutines
 
 ### Issue: Kotlinx Serialization JSON Changes
 - **Library**: kotlinx-serialization-json
 - **Current Version**: 1.6.0
-- **Target Version**: Latest (TBD - likely 1.7.x or 2.x)
+- **Target Version**: 1.9.0 ✅ **COMPLETED**
 - **Severity**: MEDIUM
 - **Impact**: JSON serialization/deserialization
-- **Potential Breaking Changes**:
-  - `Json` builder API changes
-  - `decodeFromString`/`encodeToString` method changes
-  - Serialization format changes
+- **Status**: ✅ **RESOLVED** - No breaking changes detected
+- **Breaking Changes**: None - `Json` builder API and `decodeFromString` remain compatible
 - **Refactoring Tasks**:
-  - [ ] Review kotlinx-serialization changelog
-  - [ ] Update `Json` builder usage in `PowerPointGeneratorTool.kt`
-  - [ ] Verify `@Serializable` annotation compatibility
-  - [ ] Test JSON parsing for slide content
-  - [ ] Verify `SlideContent`, `SlideType`, `PresentationRequest` serialization
+  - [x] Review kotlinx-serialization changelog - No breaking changes
+  - [x] Update `Json` builder usage in `PowerPointGeneratorTool.kt` - No changes needed
+  - [x] Verify `@Serializable` annotation compatibility - ✅ Compatible
+  - [x] Test JSON parsing for slide content - ✅ Working
+  - [x] Verify `SlideContent`, `SlideType`, `PresentationRequest` serialization - ✅ Working
 - **Files Affected**:
-  - `pom.xml`
-  - `src/main/kotlin/no/josefus/abuhint/tools/PowerPointGeneratorTool.kt`
+  - `pom.xml` - ✅ Updated to 1.9.0
+  - `src/main/kotlin/no/josefus/abuhint/tools/PowerPointGeneratorTool.kt` - ✅ No changes needed
 - **Testing Requirements**:
-  - [ ] Test JSON parsing in `parseSlideContent()` method
-  - [ ] Verify serialization of data classes
+  - [x] Test JSON parsing in `parseSlideContent()` method - ✅ Working
+  - [x] Verify serialization of data classes - ✅ Working
 
 ---
 
