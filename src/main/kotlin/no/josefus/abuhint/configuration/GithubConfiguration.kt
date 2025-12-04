@@ -13,7 +13,12 @@ class GitHubConfig {
     
     @Bean
     fun gitHubClient(@Value("\${github.repo-token}") token: String): GitHub {
-        logger.info("Initializing GitHub client with provided token: $token")
+        val maskedToken = if (token.length > 8) {
+            "${token.take(4)}${"*".repeat(token.length - 8)}${token.takeLast(4)}"
+        } else {
+            "****"
+        }
+        logger.info("Initializing GitHub client with token: $maskedToken")
         val gitHub = GitHubBuilder()
             .withOAuthToken(token)
             .also { logger.info("GitHubBuilder configured with OAuth token.") }

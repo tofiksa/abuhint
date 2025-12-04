@@ -45,9 +45,14 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
                 builderClass.getMethod("minScore", Double::class.java).invoke(builder, 0.75)
                 val request = builderClass.getMethod("build").invoke(builder)
                 val searchMethod = embeddingStore.javaClass.getMethod("search", searchRequestClass)
+                val searchResult = searchMethod.invoke(embeddingStore, request)
+                // In LangChain4j 1.x, search() returns EmbeddingSearchResult, not List directly
+                // Need to call .matches() to get the actual list
+                val matchesMethod = searchResult.javaClass.getMethod("matches")
                 @Suppress("UNCHECKED_CAST")
-                searchMethod.invoke(embeddingStore, request) as List<EmbeddingMatch<TextSegment>>
+                matchesMethod.invoke(searchResult) as List<EmbeddingMatch<TextSegment>>
             } catch (e: Exception) {
+                logger.debug("New API failed, trying fallback: ${e.message}")
                 // Fallback to old API if available
                 try {
                     val findRelevantMethod = embeddingStore.javaClass.getMethod("findRelevant", 
@@ -55,6 +60,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
                     @Suppress("UNCHECKED_CAST")
                     findRelevantMethod.invoke(embeddingStore, queryEmbedding, 5, 0.75) as List<EmbeddingMatch<TextSegment>>
                 } catch (e2: Exception) {
+                    logger.warn("Both search APIs failed, returning empty list: ${e2.message}")
                     emptyList<EmbeddingMatch<TextSegment>>()
                 }
             }
