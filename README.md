@@ -31,11 +31,13 @@ Welcome to **AbuHint**, a Kotlin-based Spring Boot application that combines the
 
 ## 🏗️ Tech Stack
 
-- **Languages**: Kotlin, Java
-- **Framework**: Spring Boot
-- **AI Framework**: LangChain4j
-- **Email Service**: Resend API
+- **Languages**: Kotlin 2.0.21, Java 21
+- **Framework**: Spring Boot 3.4.4
+- **AI Framework**: LangChain4j 1.9.1
+- **Email Service**: Resend API 4.4.0
 - **Database**: H2 (in-memory)
+- **Document Processing**: Apache POI 5.5.1
+- **Reactive**: Reactor Core 3.7.4 (Spring Boot managed)
 
 ---
 

@@ -3,12 +3,12 @@ package no.josefus.abuhint.configuration
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.memory.chat.ChatMemoryProvider
 import dev.langchain4j.memory.chat.MessageWindowChatMemory
-import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
+import no.josefus.abuhint.service.SimpleTokenizer
+import no.josefus.abuhint.service.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
-import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.tools.EmailService
 import no.josefus.abuhint.tools.PowerPointGeneratorTool
@@ -33,6 +33,7 @@ public class LangChain4jConfiguration {
         return OpenAiEmbeddingModel.builder()
             .apiKey(openaiapikey)
             .modelName("text-embedding-ada-002")
+            .httpClientBuilder(dev.langchain4j.http.client.spring.restclient.SpringRestClientBuilderFactory().create())
             .build()
     }
 
@@ -40,24 +41,18 @@ public class LangChain4jConfiguration {
         val effectiveNamespace = id.ifEmpty { "startup" }
 
         return embeddingStoreCache.computeIfAbsent(effectiveNamespace) {
-            val indexConfig = PineconeServerlessIndexConfig.builder()
-                .cloud("AWS")
-                .region("us-east-1")
-                .dimension(embeddingModel.dimension())
-                .build()
-
+            // Note: createIndex() is removed to avoid missing dependency issue with org.openapitools.db_control.client
+            // The index should already exist in Pinecone. If not, create it manually via Pinecone console or API.
             PineconeEmbeddingStore.builder()
                 .apiKey(pinecone_api)
                 .index("paaskeeggjakt")
                 .nameSpace(effectiveNamespace)
-                .createIndex(indexConfig)
                 .build()
         }
     }
 
     @Bean
     fun chatMemoryProvider(
-        tokenizer: Tokenizer,
         chatMemoryStore: ConcretePineconeChatMemoryStore,
     ): ChatMemoryProvider {
         val maxMessages = 100
@@ -86,5 +81,12 @@ public class LangChain4jConfiguration {
     @Bean
     fun powerPointTool(): PowerPointGeneratorTool {
         return PowerPointGeneratorTool()
+    }
+
+    @Bean
+    fun tokenizer(): Tokenizer {
+        // In LangChain4j 1.9+, Tokenizer is not available as a separate class
+        // Use a simple character-based approximation
+        return SimpleTokenizer()
     }
 }

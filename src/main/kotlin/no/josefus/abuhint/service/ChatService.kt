@@ -4,7 +4,7 @@ import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
-import dev.langchain4j.model.Tokenizer
+import no.josefus.abuhint.service.Tokenizer
 import java.util.UUID
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.repository.LangChain4jAssistant
@@ -43,7 +43,7 @@ class ChatService(
             formatMessagesToContext(relevantMessages)
 
         // Calculate token count
-        val totalTokens = tokenizer.estimateTokenCountInText(enhancedMessage)
+        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
         logger.info("Total tokens in message: $totalTokens")
         // Better context trimming
         if (totalTokens > maxContextTokens) {
@@ -51,10 +51,11 @@ class ChatService(
             // Split into message units
             val messages = relevantMessages.toList()
             val trimmedMessages = mutableListOf<ChatMessage>()
-            var currentTokenCount = tokenizer.estimateTokenCountInText(userMessage)
+            var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
 
             for (message in messages) {
-                val messageTokens = tokenizer.estimateTokenCountInText(message.text())
+                val messageText = getMessageText(message)
+                val messageTokens = tokenizer.estimateTokenCount(messageText)
                 if (currentTokenCount + messageTokens <= maxContextTokens) {
                     trimmedMessages.add(message)
                     currentTokenCount += messageTokens
@@ -94,7 +95,7 @@ class ChatService(
             formatMessagesToContext(relevantMessages)
 
         // Calculate token count
-        val totalTokens = tokenizer.estimateTokenCountInText(enhancedMessage)
+        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
         logger.info("Total tokens in message: $totalTokens")
         // Better context trimming
         if (totalTokens > maxContextTokens) {
@@ -102,10 +103,11 @@ class ChatService(
             // Split into message units
             val messages = relevantMessages.toList()
             val trimmedMessages = mutableListOf<ChatMessage>()
-            var currentTokenCount = tokenizer.estimateTokenCountInText(userMessage)
+            var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
 
             for (message in messages) {
-                val messageTokens = tokenizer.estimateTokenCountInText(message.text())
+                val messageText = getMessageText(message)
+                val messageTokens = tokenizer.estimateTokenCount(messageText)
                 if (currentTokenCount + messageTokens <= maxContextTokens) {
                     trimmedMessages.add(message)
                     currentTokenCount += messageTokens
@@ -123,15 +125,49 @@ class ChatService(
     }
 
 
+    private fun getMessageText(message: ChatMessage): String {
+        return when (message) {
+            is UserMessage -> {
+                try {
+                    message.javaClass.getMethod("singleText").invoke(message) as? String
+                        ?: message.javaClass.getMethod("text").invoke(message) as? String
+                        ?: ""
+                } catch (e: Exception) {
+                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                }
+            }
+            is AiMessage -> {
+                try {
+                    message.javaClass.getMethod("singleText").invoke(message) as? String
+                        ?: message.javaClass.getMethod("text").invoke(message) as? String
+                        ?: ""
+                } catch (e: Exception) {
+                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                }
+            }
+            is SystemMessage -> {
+                try {
+                    message.javaClass.getMethod("singleText").invoke(message) as? String
+                        ?: message.javaClass.getMethod("text").invoke(message) as? String
+                        ?: ""
+                } catch (e: Exception) {
+                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                }
+            }
+            else -> ""
+        }
+    }
+
     private fun formatMessagesToContext(messages: List<ChatMessage>): String {
         val contextBuilder = StringBuilder()
         if (messages.isNotEmpty()) {
             contextBuilder.append("Previous relevant conversation context:\n")
             messages.forEach { message ->
+                val text = getMessageText(message)
                 when (message) {
-                    is UserMessage -> contextBuilder.append("User: ${message.text()}\n")
-                    is AiMessage -> contextBuilder.append("Assistant: ${message.text()}\n")
-                    is SystemMessage -> contextBuilder.append("System: ${message.text()}\n")
+                    is UserMessage -> contextBuilder.append("User: $text\n")
+                    is AiMessage -> contextBuilder.append("Assistant: $text\n")
+                    is SystemMessage -> contextBuilder.append("System: $text\n")
                 }
             }
             contextBuilder.append("\nCurrent conversation:\n")
