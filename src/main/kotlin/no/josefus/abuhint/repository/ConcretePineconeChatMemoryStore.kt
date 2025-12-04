@@ -5,10 +5,9 @@ import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
+import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingMatch
-import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
-
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -18,6 +17,16 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
 
     private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
 
+    /**
+     * Retrieves relevant chat messages from Pinecone using semantic search.
+     * Messages are filtered by token limit and relevance score.
+     * 
+     * @param memoryId The chat session ID
+     * @param query The search query (typically the current user message)
+     * @param maxTokens Maximum number of tokens to retrieve
+     * @param tokenizer Tokenizer for counting tokens
+     * @return List of relevant embedding matches sorted by relevance
+     */
     fun retrieveFromPineconeWithTokenLimit(
         memoryId: String,
         query: String,
@@ -33,81 +42,89 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            // In LangChain4j 1.9+, use search() method with SearchRequest
-            val searchResults = try {
-                // Try new API first
-                val searchRequestClass = Class.forName("dev.langchain4j.store.embedding.SearchRequest")
-                val builderMethod = searchRequestClass.getMethod("builder")
-                val builder = builderMethod.invoke(null)
-                val builderClass = builder.javaClass
-                builderClass.getMethod("queryEmbedding", dev.langchain4j.data.embedding.Embedding::class.java).invoke(builder, queryEmbedding)
-                builderClass.getMethod("maxResults", Int::class.java).invoke(builder, 5)
-                builderClass.getMethod("minScore", Double::class.java).invoke(builder, 0.75)
-                val request = builderClass.getMethod("build").invoke(builder)
-                val searchMethod = embeddingStore.javaClass.getMethod("search", searchRequestClass)
-                val searchResult = searchMethod.invoke(embeddingStore, request)
-                // In LangChain4j 1.x, search() returns EmbeddingSearchResult, not List directly
-                // Need to call .matches() to get the actual list
-                val matchesMethod = searchResult.javaClass.getMethod("matches")
-                @Suppress("UNCHECKED_CAST")
-                matchesMethod.invoke(searchResult) as List<EmbeddingMatch<TextSegment>>
-            } catch (e: Exception) {
-                logger.debug("New API failed, trying fallback: ${e.message}")
-                // Fallback to old API if available
-                try {
-                    val findRelevantMethod = embeddingStore.javaClass.getMethod("findRelevant", 
-                        dev.langchain4j.data.embedding.Embedding::class.java, Int::class.java, Double::class.java)
-                    @Suppress("UNCHECKED_CAST")
-                    findRelevantMethod.invoke(embeddingStore, queryEmbedding, 5, 0.75) as List<EmbeddingMatch<TextSegment>>
-                } catch (e2: Exception) {
-                    logger.warn("Both search APIs failed, returning empty list: ${e2.message}")
-                    emptyList<EmbeddingMatch<TextSegment>>()
-                }
-            }
+            // Perform semantic search - retrieve more results than needed to account for token filtering
+            // Using a lower minScore (0.5) to get more relevant results, then filter by tokens
+            val searchResults = embeddingStore.findRelevant(
+                queryEmbedding,
+                50,  // maxResults - Get more results initially
+                0.5  // minScore - Lower threshold for better recall
+            )
 
+            // Filter results by token limit while maintaining relevance order
             var tokenCount = 0
             val limitedResults = mutableListOf<EmbeddingMatch<TextSegment>>()
 
             for (result in searchResults) {
                 // Calculate the token count for the current segment
-                val segmentTokens = tokenizer.estimateTokenCount(result.embedded().text())
-                if (tokenCount + segmentTokens > maxTokens) break
+                val segmentText = result.embedded().text()
+                val segmentTokens = tokenizer.estimateTokenCountInText(segmentText)
+                
+                // Stop if adding this segment would exceed the token limit
+                if (tokenCount + segmentTokens > maxTokens) {
+                    logger.debug("Token limit reached at ${limitedResults.size} messages (${tokenCount} tokens)")
+                    break
+                }
+                
                 tokenCount += segmentTokens
                 limitedResults.add(result)
+                
+                logger.debug("Added message with ${segmentTokens} tokens (total: $tokenCount)")
             }
 
-            logger.info("Retrieved ${limitedResults.size} messages within token limit for ID: $memoryId")
+            logger.info("Retrieved ${limitedResults.size} relevant messages from Pinecone for ID: $memoryId " +
+                    "(${tokenCount} tokens, query: '${query.take(50)}...')")
+            
             return limitedResults
         } catch (e: Exception) {
-            logger.error("Failed to retrieve chat memory from Pinecone: ${e.message}", e)
+            logger.error("Failed to retrieve chat memory from Pinecone for ID: $memoryId: ${e.message}", e)
             return emptyList()
         }
     }
 
-    /** Converts search results to chat messages */
+    /**
+     * Converts Pinecone search results to ChatMessage objects.
+     * Each TextSegment contains a single message formatted as "TYPE: content".
+     * 
+     * @param segments List of embedding matches from Pinecone
+     * @return List of parsed ChatMessage objects
+     */
     fun parseResultsToMessages(segments: List<EmbeddingMatch<TextSegment>>): List<ChatMessage> {
-
-        fun parseLineToChatMessage(line: String): ChatMessage? {
-            val parts = line.split(": ", limit = 10)
-            if (parts.size == 2 && parts[1].isNotBlank()) {
-                return when (parts[0]) {
-                    "USER" -> UserMessage(parts[1])
-                    "AI" -> AiMessage(parts[1])
-                    "SYSTEM" -> SystemMessage(parts[1])
-                    else -> null
-                }
-            }
+        return segments.mapNotNull { embeddingMatch ->
+            parseSegmentToChatMessage(embeddingMatch.embedded())
+        }
+    }
+    
+    /**
+     * Parses a single TextSegment to a ChatMessage.
+     * Expected format: "MESSAGE_TYPE: message content"
+     */
+    private fun parseSegmentToChatMessage(segment: TextSegment): ChatMessage? {
+        val text = segment.text().trim()
+        if (text.isBlank()) return null
+        
+        // Split on first ": " to separate type from content
+        val colonIndex = text.indexOf(": ")
+        if (colonIndex == -1) {
+            logger.warn("Invalid message format (missing ': '): ${text.take(50)}")
             return null
         }
-
-        fun convertSegmentToChatMessages(segment: TextSegment): List<ChatMessage> {
-            return segment.text().split("\n")
-                .filter { it.isNotBlank() }
-                .mapNotNull { line -> parseLineToChatMessage(line) }
+        
+        val messageType = text.substring(0, colonIndex).trim()
+        val messageContent = text.substring(colonIndex + 2).trim()
+        
+        if (messageContent.isBlank()) {
+            logger.warn("Empty message content for type: $messageType")
+            return null
         }
-
-        return segments.flatMap { embeddingMatch ->
-            convertSegmentToChatMessages(embeddingMatch.embedded())
+        
+        return when (messageType.uppercase()) {
+            "USER" -> UserMessage(messageContent)
+            "AI" -> AiMessage(messageContent)
+            "SYSTEM" -> SystemMessage(messageContent)
+            else -> {
+                logger.warn("Unknown message type: $messageType")
+                null
+            }
         }
     }
 }
