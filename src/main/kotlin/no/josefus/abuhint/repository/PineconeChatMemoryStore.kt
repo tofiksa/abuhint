@@ -1,7 +1,10 @@
 package no.josefus.abuhint.repository
 
 import dev.langchain4j.data.embedding.Embedding
+import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.memory.chat.ChatMemoryStore
 import no.josefus.abuhint.configuration.LangChain4jConfiguration

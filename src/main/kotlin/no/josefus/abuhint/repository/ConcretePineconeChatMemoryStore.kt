@@ -5,8 +5,8 @@ import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
-import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingMatch
+import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
