@@ -16,8 +16,9 @@
 
 	<properties>
 		<java.version>21</java.version>
-		<kotlin.version>1.9.25</kotlin.version>
-		<langchain.version>0.36.1</langchain.version>
+		<kotlin.version>2.0.21</kotlin.version>
+		<langchain.version>1.9.1</langchain.version>
+		<langchain.spring.version>1.9.1-beta17</langchain.spring.version>
 	</properties>
 
 	<dependencies>
@@ -29,12 +30,10 @@
 		<dependency>
 			<groupId>org.jetbrains.kotlin</groupId>
 			<artifactId>kotlin-stdlib</artifactId>
-			<version>1.9.10</version>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.module</groupId>
 			<artifactId>jackson-module-kotlin</artifactId>
-			<version>2.18.0</version>
 		</dependency>
 
 		<!-- Apache POI for PowerPoint generation -->
@@ -89,17 +88,17 @@
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-spring-boot-starter</artifactId>
-			<version>${langchain.version}</version>
+			<version>${langchain.spring.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
-			<version>${langchain.version}</version>
+			<version>${langchain.spring.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-pinecone</artifactId>
-			<version>${langchain.version}</version>
+			<version>${langchain.spring.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
@@ -114,7 +113,6 @@
 		<dependency>
 			<groupId>io.projectreactor</groupId>
 			<artifactId>reactor-core</artifactId>
-			<version>3.7.4</version> <!-- Use the latest version if available -->
 		</dependency>
 
 		<!-- Pinecone dependencies -->

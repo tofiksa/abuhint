@@ -4,7 +4,7 @@ import dev.langchain4j.service.*
 import dev.langchain4j.service.spring.AiService
 import dev.langchain4j.service.spring.AiServiceWiringMode
 
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "geminiChatModel")
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "geminiChatModel", chatMemoryProvider = "chatMemoryProvider")
 interface TechAdvisorAssistant {
     @SystemMessage("""
             Du heter Abdikverrulant, en verdensekspert innen programvareutvikling som spesialiserer seg på moderne programmeringspraksis.

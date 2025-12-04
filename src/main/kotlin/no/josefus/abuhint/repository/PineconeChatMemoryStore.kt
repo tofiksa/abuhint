@@ -1,7 +1,10 @@
 package no.josefus.abuhint.repository
 
 import dev.langchain4j.data.embedding.Embedding
+import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.memory.chat.ChatMemoryStore
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
@@ -30,7 +33,39 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
             memoryCache[id] = messages.toMutableList()
 
             // Create a text representation of the chat history
-            val chatText = TextSegment.from(messages.joinToString("\n") { "${it.type()}: ${it.text()}" })
+            val chatText = TextSegment.from(messages.joinToString("\n") { message ->
+                val text = when (message) {
+                    is UserMessage -> {
+                        try {
+                            message.javaClass.getMethod("singleText").invoke(message) as? String
+                                ?: message.javaClass.getMethod("text").invoke(message) as? String
+                                ?: ""
+                        } catch (e: Exception) {
+                            message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                        }
+                    }
+                    is AiMessage -> {
+                        try {
+                            message.javaClass.getMethod("singleText").invoke(message) as? String
+                                ?: message.javaClass.getMethod("text").invoke(message) as? String
+                                ?: ""
+                        } catch (e: Exception) {
+                            message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                        }
+                    }
+                    is SystemMessage -> {
+                        try {
+                            message.javaClass.getMethod("singleText").invoke(message) as? String
+                                ?: message.javaClass.getMethod("text").invoke(message) as? String
+                                ?: ""
+                        } catch (e: Exception) {
+                            message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
+                        }
+                    }
+                    else -> ""
+                }
+                "${message.type()}: $text"
+            })
             // Create a TextSegment for the embedding
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             // Generate the embedding

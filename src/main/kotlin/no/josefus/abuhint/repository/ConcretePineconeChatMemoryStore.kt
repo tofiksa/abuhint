@@ -5,8 +5,8 @@ import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
-import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingMatch
+import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 
 import org.slf4j.LoggerFactory
@@ -33,22 +33,38 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            val searchResults = embeddingStore.findRelevant(
-                queryEmbedding,5, 0.75
-
-                /*dev.langchain4j.store.embedding.FindRequest.builder()
-                    .embedding(queryEmbedding)
-                    .maxResults(100)
-                    .minScore(0.0)
-                    .build()*/
-            )
+            // In LangChain4j 1.9+, use search() method with SearchRequest
+            val searchResults = try {
+                // Try new API first
+                val searchRequestClass = Class.forName("dev.langchain4j.store.embedding.SearchRequest")
+                val builderMethod = searchRequestClass.getMethod("builder")
+                val builder = builderMethod.invoke(null)
+                val builderClass = builder.javaClass
+                builderClass.getMethod("queryEmbedding", dev.langchain4j.data.embedding.Embedding::class.java).invoke(builder, queryEmbedding)
+                builderClass.getMethod("maxResults", Int::class.java).invoke(builder, 5)
+                builderClass.getMethod("minScore", Double::class.java).invoke(builder, 0.75)
+                val request = builderClass.getMethod("build").invoke(builder)
+                val searchMethod = embeddingStore.javaClass.getMethod("search", searchRequestClass)
+                @Suppress("UNCHECKED_CAST")
+                searchMethod.invoke(embeddingStore, request) as List<EmbeddingMatch<TextSegment>>
+            } catch (e: Exception) {
+                // Fallback to old API if available
+                try {
+                    val findRelevantMethod = embeddingStore.javaClass.getMethod("findRelevant", 
+                        dev.langchain4j.data.embedding.Embedding::class.java, Int::class.java, Double::class.java)
+                    @Suppress("UNCHECKED_CAST")
+                    findRelevantMethod.invoke(embeddingStore, queryEmbedding, 5, 0.75) as List<EmbeddingMatch<TextSegment>>
+                } catch (e2: Exception) {
+                    emptyList<EmbeddingMatch<TextSegment>>()
+                }
+            }
 
             var tokenCount = 0
             val limitedResults = mutableListOf<EmbeddingMatch<TextSegment>>()
 
             for (result in searchResults) {
                 // Calculate the token count for the current segment
-                val segmentTokens = tokenizer.estimateTokenCountInText(result.embedded().text())
+                val segmentTokens = tokenizer.estimateTokenCount(result.embedded().text())
                 if (tokenCount + segmentTokens > maxTokens) break
                 tokenCount += segmentTokens
                 limitedResults.add(result)

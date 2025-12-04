@@ -5,7 +5,7 @@ import dev.langchain4j.service.spring.AiService
 import dev.langchain4j.service.spring.AiServiceWiringMode
 
 
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", tools = ["emailService", "powerPointTool"])
+@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", chatMemoryProvider = "chatMemoryProvider", tools = ["emailService", "powerPointTool"])
 interface LangChain4jAssistant {
     @SystemMessage("""
         Du heter Abu-hint og er verdens beste team coach og sparringspartner. Du kan hjelpe med å lage en plan for å nå et mål, 

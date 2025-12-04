@@ -3,9 +3,10 @@ package no.josefus.abuhint.configuration
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.memory.chat.ChatMemoryProvider
 import dev.langchain4j.memory.chat.MessageWindowChatMemory
-import dev.langchain4j.model.Tokenizer
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
+import no.josefus.abuhint.service.SimpleTokenizer
+import no.josefus.abuhint.service.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeServerlessIndexConfig
@@ -33,6 +34,7 @@ public class LangChain4jConfiguration {
         return OpenAiEmbeddingModel.builder()
             .apiKey(openaiapikey)
             .modelName("text-embedding-ada-002")
+            .httpClientBuilder(dev.langchain4j.http.client.spring.restclient.SpringRestClientBuilderFactory().create())
             .build()
     }
 
@@ -57,7 +59,6 @@ public class LangChain4jConfiguration {
 
     @Bean
     fun chatMemoryProvider(
-        tokenizer: Tokenizer,
         chatMemoryStore: ConcretePineconeChatMemoryStore,
     ): ChatMemoryProvider {
         val maxMessages = 100
@@ -86,5 +87,12 @@ public class LangChain4jConfiguration {
     @Bean
     fun powerPointTool(): PowerPointGeneratorTool {
         return PowerPointGeneratorTool()
+    }
+
+    @Bean
+    fun tokenizer(): Tokenizer {
+        // In LangChain4j 1.9+, Tokenizer is not available as a separate class
+        // Use a simple character-based approximation
+        return SimpleTokenizer()
     }
 }
