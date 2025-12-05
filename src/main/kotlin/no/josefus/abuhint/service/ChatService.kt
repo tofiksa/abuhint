@@ -25,10 +25,17 @@ class ChatService(
         val uuid = UUID.randomUUID().toString()
         val maxContextTokens = 8192
         val tokenizer = this.tokenizer
+        
+        // Use chatId as-is (empty chatId will use "startup" namespace)
+        // Important: Use the same chatId consistently to retrieve previous conversations
+        val effectiveChatId = chatId.ifEmpty { "startup" }
+        if (chatId.isEmpty()) {
+            logger.debug("Empty chatId provided - using 'startup' namespace. Provide a unique chatId to isolate conversations.")
+        }
 
         val relevantEmbeddingMatches =
             retrieveRelevantContext(
-                chatId, userMessage, maxContextTokens, tokenizer
+                effectiveChatId, userMessage, maxContextTokens, tokenizer
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
@@ -66,9 +73,9 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return assistant.chat(chatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
         }
-        return assistant.chat(chatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
 
     }
 
@@ -77,10 +84,17 @@ class ChatService(
         val uuid = UUID.randomUUID().toString()
         val maxContextTokens = 8192
         val tokenizer = this.tokenizer
+        
+        // Use chatId as-is (empty chatId will use "startup" namespace)
+        // Important: Use the same chatId consistently to retrieve previous conversations
+        val effectiveChatId = chatId.ifEmpty { "startup" }
+        if (chatId.isEmpty()) {
+            logger.debug("Empty chatId provided - using 'startup' namespace. Provide a unique chatId to isolate conversations.")
+        }
 
         val relevantEmbeddingMatches =
             retrieveRelevantContext(
-                chatId, userMessage, maxContextTokens, tokenizer
+                effectiveChatId, userMessage, maxContextTokens, tokenizer
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
@@ -118,9 +132,9 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return geminiAssistant.chat(chatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
         }
-        return geminiAssistant.chat(chatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
 
     }
 
