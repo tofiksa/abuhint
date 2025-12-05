@@ -6,6 +6,7 @@ import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingMatch
+import dev.langchain4j.store.embedding.EmbeddingSearchRequest
 import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import org.slf4j.LoggerFactory
@@ -16,6 +17,42 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
         PineconeChatMemoryStore(langChain4jConfiguration) {
 
     private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
+
+    companion object {
+        internal fun searchWithRequest(
+            embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
+            queryEmbedding: dev.langchain4j.data.embedding.Embedding,
+            maxResults: Int,
+            minScore: Double,
+            logger: org.slf4j.Logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
+        ): List<EmbeddingMatch<TextSegment>> {
+            return try {
+                val request = EmbeddingSearchRequest.builder()
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(maxResults)
+                    .minScore(minScore)
+                    .build()
+
+                val results = embeddingStore.search(request).matches()
+                logger.debug(
+                    "Invoked search(EmbeddingSearchRequest) with maxResults=$maxResults minScore=$minScore; received ${results.size} result(s)"
+                )
+                results
+            } catch (e: NoSuchMethodError) {
+                val allMethods = embeddingStore.javaClass.methods
+                val searchMethods = allMethods.filter { it.name == "search" }
+                logger.error(
+                    "search(EmbeddingSearchRequest) not available on EmbeddingStore. Available methods: ${
+                        searchMethods.map { "${it.name}(${it.parameterTypes.joinToString { it.simpleName }})" }
+                    }"
+                )
+                emptyList()
+            } catch (e: Exception) {
+                logger.error("Error invoking search(EmbeddingSearchRequest): ${e.message}", e)
+                emptyList()
+            }
+        }
+    }
 
     /**
      * Retrieves relevant chat messages from Pinecone using semantic search.
@@ -42,83 +79,8 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            // Perform semantic search using the search method
-            // Use getMethods() instead of getDeclaredMethod to avoid ClassNotFoundException
-            // when optional dependencies aren't available
-            val searchResults: List<EmbeddingMatch<TextSegment>> = try {
-                val allMethods = embeddingStore.javaClass.methods
-                val searchMethods = allMethods.filter { it.name == "search" }
-                
-                if (searchMethods.isEmpty()) {
-                    logger.error("No 'search' method found in EmbeddingStore. Available methods: ${allMethods.map { "${it.name}(${it.parameterTypes.joinToString { it.simpleName }})" }}")
-                    emptyList()
-                } else {
-                    logger.debug("Found ${searchMethods.size} search method(s). Signatures: ${searchMethods.map { "${it.name}(${it.parameterTypes.joinToString { it.simpleName }})" }}")
-                    
-                    var results: List<EmbeddingMatch<TextSegment>>? = null
-                    var lastError: Exception? = null
-                    
-                    // Try all search methods with 3 parameters first (most common: Embedding, int, double)
-                    for (method in searchMethods.filter { it.parameterTypes.size == 3 }) {
-                        try {
-                            // Check if first parameter is Embedding type
-                            val firstParam = method.parameterTypes[0]
-                            if (dev.langchain4j.data.embedding.Embedding::class.java.isAssignableFrom(firstParam)) {
-                                @Suppress("UNCHECKED_CAST")
-                                val invoked = method.invoke(embeddingStore, queryEmbedding, 50, 0.3)
-                                results = invoked as? List<EmbeddingMatch<TextSegment>>
-                                if (results != null) {
-                                    logger.debug("Successfully invoked search method: ${method.name}(${method.parameterTypes.joinToString { it.simpleName }})")
-                                    break
-                                }
-                            }
-                        } catch (e: Exception) {
-                            lastError = e
-                            logger.debug("Failed to invoke search method with 3 params: ${e.message}")
-                        }
-                    }
-                    
-                    // Try all search methods with 2 parameters
-                    if (results == null) {
-                        for (method in searchMethods.filter { it.parameterTypes.size == 2 }) {
-                            try {
-                                // Check if first parameter is Embedding type
-                                val firstParam = method.parameterTypes[0]
-                                if (dev.langchain4j.data.embedding.Embedding::class.java.isAssignableFrom(firstParam)) {
-                                    @Suppress("UNCHECKED_CAST")
-                                    val invoked = method.invoke(embeddingStore, queryEmbedding, 50)
-                                    results = invoked as? List<EmbeddingMatch<TextSegment>>
-                                    if (results != null) {
-                                        logger.debug("Successfully invoked search method: ${method.name}(${method.parameterTypes.joinToString { it.simpleName }})")
-                                        break
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                lastError = e
-                                logger.debug("Failed to invoke search method with 2 params: ${e.message}")
-                            }
-                        }
-                    }
-                    
-                    if (results == null) {
-                        logger.error("Could not invoke any search method. Last error: ${lastError?.message}. Available search methods: ${searchMethods.map { "${it.name}(${it.parameterTypes.joinToString { it.simpleName }})" }}")
-                        lastError?.printStackTrace()
-                        emptyList()
-                    } else {
-                        results
-                    }
-                }
-            } catch (e: ClassNotFoundException) {
-                logger.error("ClassNotFoundException while searching methods (missing optional dependency): ${e.message}. Trying alternative approach.", e)
-                emptyList()
-            } catch (e: NoClassDefFoundError) {
-                logger.error("NoClassDefFoundError while searching methods (missing optional dependency): ${e.message}. Trying alternative approach.", e)
-                emptyList()
-            } catch (e: Exception) {
-                logger.error("Error calling search method: ${e.message}", e)
-                e.printStackTrace()
-                emptyList()
-            }
+            val searchResults: List<EmbeddingMatch<TextSegment>> =
+                searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.3, logger = logger)
             
             if (searchResults.isNotEmpty()) {
                 logger.info("Search returned ${searchResults.size} results for query: '${query.take(50)}...' (memoryId: $memoryId, namespace: ${memoryId.ifEmpty { "startup" }})")
