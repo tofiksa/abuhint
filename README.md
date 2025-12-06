@@ -60,6 +60,14 @@ RESEND_API_KEY=<your-resend-api-key>
 RESEND_FROM_EMAIL=<sender-email>
 RESEND_TO_EMAIL=<recipient-email>
 RESEND_SUBJECT=<email-subject>
+WEB_SEARCH_ENABLED=false            # set true to enable the web search tool
+WEB_SEARCH_PROVIDER=tavily          # tavily (default) or brave
+WEB_SEARCH_API_KEY=<your-search-api-key>
+WEB_SEARCH_BASE_URL=https://api.tavily.com
+WEB_SEARCH_TIMEOUT_MS=5000
+WEB_SEARCH_MAX_RESULTS=6
+WEB_SEARCH_LOCALE=nb-NO
+WEB_SEARCH_SEARCH_DEPTH=basic
 ```
 
 ### 3. Run the Application

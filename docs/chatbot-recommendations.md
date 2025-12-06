@@ -23,6 +23,10 @@ P2 (medium-term resilience)
 P3 (nice-to-have)
 - Add conversation-level telemetry to measure recall rate, response length, and user satisfaction proxies.
 - Add structured citations/attributions when recalling prior turns (helps perceived memory).
+- Add web-search rollout & failure handling:
+  - Feature-flagged (`WEB_SEARCH_ENABLED`) and provider-configurable; require API key via env.
+  - Graceful user messaging for timeouts/5xx/429 and empty results.
+  - Log tool invocations (provider/query/tookMs) for observability.
 
 Concrete implementation steps
 - Change `loadRecentMessagesFromPinecone` to use `EmbeddingSearchRequest` and share the search helper used in main retrieval.

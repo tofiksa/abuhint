@@ -36,6 +36,15 @@ langchain4j:
     model-name: gemini-2.0-flash
 pinecone:
   api-key: ${PINECONE_API_KEY}
+web-search:
+  enabled: ${WEB_SEARCH_ENABLED:false}
+  provider: ${WEB_SEARCH_PROVIDER:tavily}
+  api-key: ${WEB_SEARCH_API_KEY:}
+  base-url: ${WEB_SEARCH_BASE_URL:https://api.tavily.com}
+  timeout-ms: ${WEB_SEARCH_TIMEOUT_MS:5000}
+  max-results: ${WEB_SEARCH_MAX_RESULTS:6}
+  locale: ${WEB_SEARCH_LOCALE:nb-NO}
+  search-depth: ${WEB_SEARCH_SEARCH_DEPTH:basic}
 logging:
   level:
     dev:
