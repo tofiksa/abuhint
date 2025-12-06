@@ -23,7 +23,7 @@ class ChatService(
     fun processChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 8192
+        val maxContextTokens = 6000
         val tokenizer = this.tokenizer
         
         // Require a unique chatId per session to avoid cross-talk
@@ -71,16 +71,16 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return postProcessReply(assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return postProcessReply(assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
     fun processGeminiChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 8192
+        val maxContextTokens = 6000
         val tokenizer = this.tokenizer
         
         val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
@@ -127,9 +127,9 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return postProcessReply(geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return postProcessReply(geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
@@ -182,6 +182,12 @@ class ChatService(
             contextBuilder.append("\nEnd of recalled context.\nCurrent conversation:\n")
         }
         return contextBuilder.toString()
+    }
+
+    private fun postProcessReply(reply: String): String {
+        val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
+        val maxLen = 1200
+        return if (normalized.length > maxLen) normalized.take(maxLen) + " ..." else normalized
     }
 
 
