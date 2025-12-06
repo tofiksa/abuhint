@@ -23,7 +23,7 @@ class ChatService(
     fun processChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 8192
+        val maxContextTokens = 6000
         val tokenizer = this.tokenizer
         
         // Require a unique chatId per session to avoid cross-talk
@@ -37,6 +37,7 @@ class ChatService(
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
         logger.info("Relevant messages: $relevantMessages")
 
@@ -45,13 +46,15 @@ class ChatService(
 
         // Combine context with current message
         val enhancedMessage =
-            formatMessagesToContext(relevantMessages)
+            formatMessagesToContext(summarizedMessages)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        logger.info("Total tokens in message: $totalTokens")
+        val userTokens = tokenizer.estimateTokenCount(userMessage)
+        val totalTokensWithUser = totalTokens + userTokens
+        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
         // Better context trimming
-        if (totalTokens > maxContextTokens) {
+        if (totalTokensWithUser > maxContextTokens) {
             // Instead of just taking characters, prioritize keeping complete messages
             // Split into message units
             val messages = relevantMessages.toList()
@@ -71,16 +74,16 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return postProcessReply(assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return postProcessReply(assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
     fun processGeminiChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 8192
+        val maxContextTokens = 6000
         val tokenizer = this.tokenizer
         
         val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
@@ -93,6 +96,7 @@ class ChatService(
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
         logger.info("Relevant messages: $relevantMessages")
 
@@ -101,13 +105,15 @@ class ChatService(
 
         // Combine context with current message
         val enhancedMessage =
-            formatMessagesToContext(relevantMessages)
+            formatMessagesToContext(summarizedMessages)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        logger.info("Total tokens in message: $totalTokens")
+        val userTokens = tokenizer.estimateTokenCount(userMessage)
+        val totalTokensWithUser = totalTokens + userTokens
+        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
         // Better context trimming
-        if (totalTokens > maxContextTokens) {
+        if (totalTokensWithUser > maxContextTokens) {
             // Instead of just taking characters, prioritize keeping complete messages
             // Split into message units
             val messages = relevantMessages.toList()
@@ -127,9 +133,9 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            return postProcessReply(geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        return postProcessReply(geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
@@ -182,6 +188,31 @@ class ChatService(
             contextBuilder.append("\nEnd of recalled context.\nCurrent conversation:\n")
         }
         return contextBuilder.toString()
+    }
+
+    private fun postProcessReply(reply: String): String {
+        val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
+        val maxLen = 1200
+        return if (normalized.length > maxLen) normalized.take(maxLen) + " ..." else normalized
+    }
+
+    /**
+     * Summarize older messages if the list is long, keeping the most recent `keepRecent` messages
+     * verbatim and prepending a brief summary of older content.
+     */
+    private fun summarizeIfLong(
+        messages: List<ChatMessage>,
+        tokenizer: Tokenizer,
+        keepRecent: Int,
+        summaryCharLimit: Int
+    ): List<ChatMessage> {
+        if (messages.size <= keepRecent) return messages
+
+        val recent = messages.takeLast(keepRecent)
+        val older = messages.dropLast(keepRecent)
+        val summaryText = older.joinToString(" ") { getMessageText(it) }.take(summaryCharLimit)
+        val summary = SystemMessage("Summary of earlier conversation: $summaryText")
+        return listOf(summary) + recent
     }
 
 
