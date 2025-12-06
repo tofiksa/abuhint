@@ -26,6 +26,13 @@ class WebSearchTool(
             return "Fant ingen relevante treff for: \"$query\"."
         }
         val top = response.results.take(maxResults ?: client.properties.maxResults)
+        log.info(
+            "webSearchTool invoked provider={} query=\"{}\" maxResults={} tookMs={}",
+            response.provider,
+            query.take(200),
+            top.size,
+            response.tookMs
+        )
         val builder = StringBuilder()
         builder.append("Fant ${top.size} treff (via ${response.provider}, ${response.tookMs}ms):\n")
         top.forEachIndexed { idx, r ->
