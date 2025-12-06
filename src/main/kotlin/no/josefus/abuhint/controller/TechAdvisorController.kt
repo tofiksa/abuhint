@@ -17,12 +17,13 @@ class TechAdvisorController(
     
     @PostMapping("/chat")
     fun chat(
-        @RequestParam chatId: String,
+        @RequestParam(required = false) chatId: String?,
         @RequestBody message: ChatRequest
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
 
         val uuid = UUID.randomUUID().toString()
-        val message = chatService.processGeminiChat(chatId, message.message)
+        val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val message = chatService.processGeminiChat(sessionId, message.message)
         val contentItems = List(1) {
             OpenAiCompatibleContentItem(
                 type = "text",

@@ -38,17 +38,14 @@ public class LangChain4jConfiguration {
     }
 
     fun embeddingStore(embeddingModel: EmbeddingModel, id: String): EmbeddingStore<TextSegment> {
-        val effectiveNamespace = id.ifEmpty { "startup" }
-        
-        if (id.isEmpty()) {
-            val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
-            logger.warn("Empty chatId provided - using default namespace 'startup'. This may cause conversations to be mixed. Consider providing a unique chatId.")
+        val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
+        val effectiveNamespace = id.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
+            logger.warn("Empty chatId provided - generated namespace '$it' to avoid cross-talk.")
         }
 
         return embeddingStoreCache.computeIfAbsent(effectiveNamespace) {
             // Note: createIndex() is removed to avoid missing dependency issue with org.openapitools.db_control.client
             // The index should already exist in Pinecone. If not, create it manually via Pinecone console or API.
-            val logger = org.slf4j.LoggerFactory.getLogger(LangChain4jConfiguration::class.java)
             logger.info("Creating Pinecone embedding store for namespace: $effectiveNamespace")
             PineconeEmbeddingStore.builder()
                 .apiKey(pinecone_api)

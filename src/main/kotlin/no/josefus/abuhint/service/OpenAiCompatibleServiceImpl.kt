@@ -24,8 +24,7 @@ class OpenAiCompatibleServiceImpl(
         val userMessage = request.messages.lastOrNull { it.role == "user" }?.content?.joinToString("\n") { it.text ?: "" }
             ?: throw IllegalArgumentException("No user message found in request")
 
-        // Use a random chatId for now (could be improved to use a real session)
-        val chatId = "openai-${System.currentTimeMillis()}"
+        val chatId = request.chatId?.takeIf { it.isNotBlank() } ?: "openai-${System.currentTimeMillis()}"
         val reply = chatService.processChat(chatId, userMessage)
 
         val responseMessage = OpenAiCompatibleChatMessage(
