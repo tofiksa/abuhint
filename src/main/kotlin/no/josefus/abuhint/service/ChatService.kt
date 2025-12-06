@@ -50,9 +50,11 @@ class ChatService(
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        logger.info("Total tokens in message: $totalTokens")
+        val userTokens = tokenizer.estimateTokenCount(userMessage)
+        val totalTokensWithUser = totalTokens + userTokens
+        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
         // Better context trimming
-        if (totalTokens > maxContextTokens) {
+        if (totalTokensWithUser > maxContextTokens) {
             // Instead of just taking characters, prioritize keeping complete messages
             // Split into message units
             val messages = relevantMessages.toList()
@@ -107,9 +109,11 @@ class ChatService(
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        logger.info("Total tokens in message: $totalTokens")
+        val userTokens = tokenizer.estimateTokenCount(userMessage)
+        val totalTokensWithUser = totalTokens + userTokens
+        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
         // Better context trimming
-        if (totalTokens > maxContextTokens) {
+        if (totalTokensWithUser > maxContextTokens) {
             // Instead of just taking characters, prioritize keeping complete messages
             // Split into message units
             val messages = relevantMessages.toList()
