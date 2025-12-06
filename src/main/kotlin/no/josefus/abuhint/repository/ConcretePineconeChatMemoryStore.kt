@@ -79,8 +79,13 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            val rawResults: List<EmbeddingMatch<TextSegment>> =
+            var rawResults: List<EmbeddingMatch<TextSegment>> =
                 searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.3, logger = logger)
+
+            // Adaptive fallback: if too few hits, relax threshold to widen context recall
+            if (rawResults.size < 4) {
+                rawResults = searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.0, logger = logger)
+            }
 
             // Always include the last few recent turns, then fall back to semantic ranking
             val lastNTurns = rawResults
