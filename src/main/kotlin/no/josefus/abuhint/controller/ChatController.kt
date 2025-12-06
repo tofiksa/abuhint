@@ -7,6 +7,7 @@ import no.josefus.abuhint.service.ScoreService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/chat")
