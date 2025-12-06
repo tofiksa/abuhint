@@ -174,12 +174,12 @@ class ChatService(
             messages.forEach { message ->
                 val text = getMessageText(message)
                 when (message) {
-                    is UserMessage -> contextBuilder.append("User: $text\n")
-                    is AiMessage -> contextBuilder.append("Assistant: $text\n")
-                    is SystemMessage -> contextBuilder.append("System: $text\n")
+                    is UserMessage -> contextBuilder.append("User: $text\n---\n")
+                    is AiMessage -> contextBuilder.append("Assistant: $text\n---\n")
+                    is SystemMessage -> contextBuilder.append("System: $text\n---\n")
                 }
             }
-            contextBuilder.append("\nCurrent conversation:\n")
+            contextBuilder.append("\nEnd of recalled context.\nCurrent conversation:\n")
         }
         return contextBuilder.toString()
     }
