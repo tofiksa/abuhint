@@ -1,6 +1,7 @@
 package no.josefus.abuhint.repository
 
 import dev.langchain4j.data.embedding.Embedding
+import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
@@ -209,7 +210,9 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
         messages.forEachIndexed { index, message ->
             try {
                 // Create unique ID for this message
-                val messageId = "${memoryId}_msg_${counter.getAndIncrement()}_${System.currentTimeMillis()}"
+                val order = counter.getAndIncrement()
+                val timestamp = System.currentTimeMillis()
+                val messageId = "${memoryId}_msg_${order}_${timestamp}"
                 
                 // Get message text using reflection (same approach as ChatService)
                 val messageText = getMessageText(message)
@@ -218,7 +221,13 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
                 // Normalize message type: "USER_MESSAGE" -> "USER", "AI_MESSAGE" -> "AI", etc.
                 val messageType = normalizeMessageType(message.type().toString())
                 val formattedMessageText = "$messageType: $messageText"
-                val textSegment = TextSegment.from(formattedMessageText)
+                val metadata = Metadata.from(
+                    mapOf(
+                        "ts" to timestamp.toString(),
+                        "order" to order.toString()
+                    )
+                )
+                val textSegment = TextSegment.from(formattedMessageText, metadata)
                 
                 // Generate embedding for this individual message
                 val embeddingResponse = embeddingModel.embed(textSegment)
