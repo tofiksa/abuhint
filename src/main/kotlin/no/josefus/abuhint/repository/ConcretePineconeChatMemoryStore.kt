@@ -85,7 +85,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
                         compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
                             .thenByDescending { match ->
                                 val meta = match.embedded().metadata()
-                                meta.get("ts")?.toString()?.toLongOrNull() ?: Long.MIN_VALUE
+                                meta.getLong("ts") ?: Long.MIN_VALUE
                             }
                     )
             
