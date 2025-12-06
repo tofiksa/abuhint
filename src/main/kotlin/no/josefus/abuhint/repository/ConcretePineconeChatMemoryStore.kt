@@ -81,15 +81,21 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
 
             val rawResults: List<EmbeddingMatch<TextSegment>> =
                 searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.3, logger = logger)
+
+            // Always include the last few recent turns, then fall back to semantic ranking
+            val lastNTurns = rawResults
+                .sortedByDescending { it.embedded().metadata().getLong("ts") ?: Long.MIN_VALUE }
+                .take(4)
+
             val searchResults: List<EmbeddingMatch<TextSegment>> =
-                rawResults
+                (lastNTurns + rawResults
                     .sortedWith(
                         compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
                             .thenByDescending { match ->
                                 val meta = match.embedded().metadata()
                                 meta.getLong("ts") ?: Long.MIN_VALUE
                             }
-                    )
+                    ))
                     .fold(mutableListOf<EmbeddingMatch<TextSegment>>() to mutableSetOf<String>()) { acc, match ->
                         val (list, seen) = acc
                         val text = match.embedded().text()
