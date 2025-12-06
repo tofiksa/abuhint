@@ -4,6 +4,8 @@ import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
+import dev.langchain4j.data.segment.TextSegment
+import dev.langchain4j.store.embedding.EmbeddingMatch
 import no.josefus.abuhint.service.Tokenizer
 import java.util.UUID
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
@@ -31,18 +33,18 @@ class ChatService(
             logger.warn("No chatId provided; generated session id $it to isolate conversation.")
         }
 
+        val retrievalStart = System.nanoTime()
         val relevantEmbeddingMatches =
             retrieveRelevantContext(
                 effectiveChatId, userMessage, maxContextTokens, tokenizer
             )
+        val retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000
+
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
         val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
-        logger.info("Relevant messages: $relevantMessages")
-
-
-        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory")
+        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory in ${retrievalMs}ms")
 
         // Combine context with current message
         val enhancedMessage =
@@ -74,9 +76,17 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return postProcessReply(assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
+            val modelStart = System.nanoTime()
+            val response = assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            val modelMs = (System.nanoTime() - modelStart) / 1_000_000
+            logger.info("Model call returned in ${modelMs}ms (trimmed context path)")
+            return postProcessReply(response)
         }
-        return postProcessReply(assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
+        val modelStart = System.nanoTime()
+        val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        val modelMs = (System.nanoTime() - modelStart) / 1_000_000
+        logger.info("Model call returned in ${modelMs}ms")
+        return postProcessReply(response)
 
     }
 
@@ -90,18 +100,18 @@ class ChatService(
             logger.warn("No chatId provided; generated session id $it to isolate conversation.")
         }
 
+        val retrievalStart = System.nanoTime()
         val relevantEmbeddingMatches =
             retrieveRelevantContext(
                 effectiveChatId, userMessage, maxContextTokens, tokenizer
             )
+        val retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000
+
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
         val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
-        logger.info("Relevant messages: $relevantMessages")
-
-
-        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory")
+        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory in ${retrievalMs}ms")
 
         // Combine context with current message
         val enhancedMessage =
@@ -133,9 +143,17 @@ class ChatService(
 
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            return postProcessReply(geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
+            val modelStart = System.nanoTime()
+            val response = geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+            val modelMs = (System.nanoTime() - modelStart) / 1_000_000
+            logger.info("Gemini model call returned in ${modelMs}ms (trimmed context path)")
+            return postProcessReply(response)
         }
-        return postProcessReply(geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
+        val modelStart = System.nanoTime()
+        val response = geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        val modelMs = (System.nanoTime() - modelStart) / 1_000_000
+        logger.info("Gemini model call returned in ${modelMs}ms")
+        return postProcessReply(response)
 
     }
 
@@ -221,7 +239,15 @@ class ChatService(
         query: String,
         maxTokens: Int,
         tokenizer: Tokenizer
-    ) = concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
+    ): List<EmbeddingMatch<TextSegment>> {
+        val hasHistory = concretePineconeChatMemoryStore.hasStoredMessages(memoryId)
+        if (!hasHistory) {
+            val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
+            logger.info("No stored messages for chatId=$memoryId; skipping retrieval to avoid cold-start latency")
+            return emptyList()
+        }
+        return concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
+    }
 
 
 

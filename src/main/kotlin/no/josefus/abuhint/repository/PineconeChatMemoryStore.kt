@@ -22,10 +22,13 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
     private val memoryCache = ConcurrentHashMap<String, MutableList<ChatMessage>>()
     
     // Track the last stored message count per memory ID to avoid re-storing messages
-    private val lastStoredCount = ConcurrentHashMap<String, Int>()
+    protected val lastStoredCount = ConcurrentHashMap<String, Int>()
     
     // Message counter for unique IDs
     private val messageCounters = ConcurrentHashMap<String, AtomicLong>()
+
+    @org.springframework.beans.factory.annotation.Value("\${pinecone.load-recent-on-cache-miss:false}")
+    private var loadRecentOnCacheMiss: Boolean = false
 
     override fun getMessages(memoryId: Any): MutableList<ChatMessage> {
         val id = memoryId.toString()
@@ -36,6 +39,12 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
             return cachedMessages.toMutableList()
         }
         
+        // Optionally skip remote warm-load to avoid extra latency on cold start
+        if (!loadRecentOnCacheMiss) {
+            logger.debug("Cache miss for ID: $id; skipping Pinecone warm-load (loadRecentOnCacheMiss=false)")
+            return mutableListOf()
+        }
+
         // If cache is empty, try to load recent messages from Pinecone
         // This ensures long-term memory is available even after restart
         // Note: This is best-effort - if it fails, cache will be populated as new messages arrive
@@ -117,6 +126,15 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
             logger.error("Failed to load recent messages from Pinecone: ${e.message}", e)
             return emptyList()
         }
+    }
+
+    /**
+     * Returns true if we have local cache or stored count for this memoryId,
+     * indicating prior messages exist.
+     */
+    fun hasStoredMessages(memoryId: String): Boolean {
+        if (memoryCache[memoryId]?.isNotEmpty() == true) return true
+        return (lastStoredCount[memoryId] ?: 0) > 0
     }
     
     /**
