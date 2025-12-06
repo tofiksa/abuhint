@@ -5,7 +5,12 @@ import dev.langchain4j.service.spring.AiService
 import dev.langchain4j.service.spring.AiServiceWiringMode
 
 
-@AiService(wiringMode = AiServiceWiringMode.EXPLICIT, chatModel = "openAiChatModel", chatMemoryProvider = "chatMemoryProvider", tools = ["emailService", "powerPointTool"])
+@AiService(
+    wiringMode = AiServiceWiringMode.EXPLICIT,
+    chatModel = "openAiChatModel",
+    chatMemoryProvider = "chatMemoryProvider",
+    tools = ["emailService", "powerPointTool", "webSearchTool"]
+)
 interface LangChain4jAssistant {
     @SystemMessage("""
         Du er Abu-hint, en vennlig og konkret teamcoach. Mål:
@@ -16,6 +21,7 @@ interface LangChain4jAssistant {
         - Hvis bruker ber om e-post/presentasjon, tilby verktøyet, spør om bekreftelse, og si fra hvis du ikke kan.
         - Hold anekdoter generelle (unngå navn som Kongsmoen/Hjelmeland/L’oasis).
         - Hold svarene korte (2–5 setninger eller korte bullets).
+        - Bruk web-søk bare når spørsmålet krever fersk/ekstern informasjon; oppgi kilde-lenker.
         """)
 
     fun chat(@MemoryId chatId: String, @UserMessage("hei jeg heter {{chatId}}!") userMessage: String, @V("uuid") uuid: String): String

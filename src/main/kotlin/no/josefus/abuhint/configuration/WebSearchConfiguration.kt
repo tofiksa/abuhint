@@ -2,6 +2,7 @@ package no.josefus.abuhint.configuration
 
 import no.josefus.abuhint.tools.WebSearchClient
 import no.josefus.abuhint.tools.WebSearchProperties
+import no.josefus.abuhint.tools.WebSearchTool
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.web.client.RestTemplateBuilder
 import org.springframework.context.annotation.Bean
@@ -37,6 +38,14 @@ class WebSearchConfiguration {
         webSearchProperties: WebSearchProperties
     ): WebSearchClient {
         return WebSearchClient(restTemplateBuilder, webSearchProperties)
+    }
+
+    @Bean
+    fun webSearchTool(
+        webSearchClient: WebSearchClient,
+        @Value("\${web-search.enabled:false}") enabled: Boolean
+    ): WebSearchTool {
+        return WebSearchTool(webSearchClient, enabled)
     }
 }
 

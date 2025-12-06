@@ -30,7 +30,7 @@ data class WebSearchResponse(
 @Component
 class WebSearchClient(
     private val restTemplate: RestTemplate,
-    private val properties: WebSearchProperties
+    val properties: WebSearchProperties
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(WebSearchClient::class.java)
