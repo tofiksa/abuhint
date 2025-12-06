@@ -46,7 +46,7 @@ class ChatService(
 
         // Combine context with current message
         val enhancedMessage =
-            formatMessagesToContext(relevantMessages)
+            formatMessagesToContext(summarizedMessages)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
@@ -74,7 +74,7 @@ class ChatService(
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             return postProcessReply(assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return postProcessReply(assistant.chat(effectiveChatId, "${formatMessagesToContext(summarizedMessages)}\n$enhancedMessage\nUser: $userMessage", uuid))
+        return postProcessReply(assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
@@ -103,7 +103,7 @@ class ChatService(
 
         // Combine context with current message
         val enhancedMessage =
-            formatMessagesToContext(relevantMessages)
+            formatMessagesToContext(summarizedMessages)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
@@ -131,7 +131,7 @@ class ChatService(
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             return postProcessReply(geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return postProcessReply(geminiAssistant.chat(effectiveChatId, "${formatMessagesToContext(summarizedMessages)}\n$enhancedMessage\nUser: $userMessage", uuid))
+        return postProcessReply(geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
