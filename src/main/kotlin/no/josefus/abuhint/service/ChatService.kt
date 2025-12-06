@@ -170,7 +170,7 @@ class ChatService(
     private fun formatMessagesToContext(messages: List<ChatMessage>): String {
         val contextBuilder = StringBuilder()
         if (messages.isNotEmpty()) {
-            contextBuilder.append("Previous relevant conversation context:\n")
+            contextBuilder.append("Previous relevant conversation context (most recent first):\n")
             messages.forEach { message ->
                 val text = getMessageText(message)
                 when (message) {
