@@ -79,15 +79,36 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             val queryEmbedding = embeddingModel.embed(query).content()
 
-            val searchResults: List<EmbeddingMatch<TextSegment>> =
+            var rawResults: List<EmbeddingMatch<TextSegment>> =
                 searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.3, logger = logger)
+
+            // Adaptive fallback: if too few hits, relax threshold to widen context recall
+            if (rawResults.size < 4) {
+                rawResults = searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.0, logger = logger)
+            }
+
+            // Always include the last few recent turns, then fall back to semantic ranking
+            val lastNTurns = rawResults
+                .sortedByDescending { it.embedded().metadata().getLong("ts") ?: Long.MIN_VALUE }
+                .take(4)
+
+            val searchResults: List<EmbeddingMatch<TextSegment>> =
+                (lastNTurns + rawResults
                     .sortedWith(
                         compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
                             .thenByDescending { match ->
                                 val meta = match.embedded().metadata()
                                 meta.getLong("ts") ?: Long.MIN_VALUE
                             }
-                    )
+                    ))
+                    .fold(mutableListOf<EmbeddingMatch<TextSegment>>() to mutableSetOf<String>()) { acc, match ->
+                        val (list, seen) = acc
+                        val text = match.embedded().text()
+                        if (seen.add(text)) {
+                            list.add(match)
+                        }
+                        acc
+                    }.first
             
             if (searchResults.isNotEmpty()) {
                 logger.info("Search returned ${searchResults.size} results for query: '${query.take(50)}...' (memoryId: $memoryId, namespace: ${memoryId.ifEmpty { "startup" }})")
