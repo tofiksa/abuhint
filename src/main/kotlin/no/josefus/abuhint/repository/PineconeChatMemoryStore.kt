@@ -81,52 +81,14 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
             
             logger.debug("Loading recent messages from Pinecone for memoryId: $memoryId (namespace: ${memoryId.ifEmpty { "startup" }})")
             
-            // Try to get recent messages using the search method
-            // Try different method signatures for search
-            val searchResults: List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>> = try {
-                // Try search(Embedding, Int, Double) - most common signature
-                // Use a very low threshold (0.0) to get as many messages as possible
-                // Since we're using namespace isolation, we want to retrieve all messages in this namespace
-                val method = embeddingStore.javaClass.getMethod("search", 
-                    dev.langchain4j.data.embedding.Embedding::class.java, 
-                    Int::class.java, 
-                    Double::class.java)
-                @Suppress("UNCHECKED_CAST")
-                val results = method.invoke(embeddingStore, queryEmbedding, 100, 0.0) as List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>>
-                logger.debug("Found ${results.size} potential messages in Pinecone for memoryId: $memoryId")
-                results
-            } catch (e: NoSuchMethodException) {
-                try {
-                    // Try search(Embedding, Int)
-                    val method = embeddingStore.javaClass.getMethod("search",
-                        dev.langchain4j.data.embedding.Embedding::class.java,
-                        Int::class.java)
-                    @Suppress("UNCHECKED_CAST")
-                    method.invoke(embeddingStore, queryEmbedding, 100) as List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>>
-                } catch (e2: NoSuchMethodException) {
-                    try {
-                        // Try findRelevant as fallback (for compatibility)
-                        val method = embeddingStore.javaClass.getMethod("findRelevant",
-                            dev.langchain4j.data.embedding.Embedding::class.java,
-                            Int::class.java)
-                        @Suppress("UNCHECKED_CAST")
-                        method.invoke(embeddingStore, queryEmbedding, 100) as List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>>
-                    } catch (e3: NoSuchMethodException) {
-                        // Log available methods for debugging
-                        val availableMethods = embeddingStore.javaClass.methods
-                            .filter { it.name.contains("find", ignoreCase = true) || it.name.contains("search", ignoreCase = true) || it.name.contains("query", ignoreCase = true) }
-                            .map { "${it.name}(${it.parameterTypes.joinToString { it.simpleName }})" }
-                        
-                        if (availableMethods.isNotEmpty()) {
-                            logger.debug("Could not find search or findRelevant method. Available search methods: ${availableMethods.joinToString(", ")}")
-                        } else {
-                            logger.debug("Could not find search or findRelevant method. No search methods found in EmbeddingStore")
-                        }
-                        // Return empty list - this is not critical, cache will be populated as new messages arrive
-                        emptyList()
-                    }
-                }
-            }
+            val searchResults: List<dev.langchain4j.store.embedding.EmbeddingMatch<TextSegment>> =
+                ConcretePineconeChatMemoryStore.searchWithRequest(
+                    embeddingStore = embeddingStore,
+                    queryEmbedding = queryEmbedding,
+                    maxResults = 100,
+                    minScore = 0.0,
+                    logger = logger
+                )
             
             // Parse results to messages
             val messages = searchResults.mapNotNull { match ->
