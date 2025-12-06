@@ -26,11 +26,9 @@ class ChatService(
         val maxContextTokens = 8192
         val tokenizer = this.tokenizer
         
-        // Use chatId as-is (empty chatId will use "startup" namespace)
-        // Important: Use the same chatId consistently to retrieve previous conversations
-        val effectiveChatId = chatId.ifEmpty { "startup" }
-        if (chatId.isEmpty()) {
-            logger.debug("Empty chatId provided - using 'startup' namespace. Provide a unique chatId to isolate conversations.")
+        // Require a unique chatId per session to avoid cross-talk
+        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
+            logger.warn("No chatId provided; generated session id $it to isolate conversation.")
         }
 
         val relevantEmbeddingMatches =
@@ -85,11 +83,8 @@ class ChatService(
         val maxContextTokens = 8192
         val tokenizer = this.tokenizer
         
-        // Use chatId as-is (empty chatId will use "startup" namespace)
-        // Important: Use the same chatId consistently to retrieve previous conversations
-        val effectiveChatId = chatId.ifEmpty { "startup" }
-        if (chatId.isEmpty()) {
-            logger.debug("Empty chatId provided - using 'startup' namespace. Provide a unique chatId to isolate conversations.")
+        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
+            logger.warn("No chatId provided; generated session id $it to isolate conversation.")
         }
 
         val relevantEmbeddingMatches =

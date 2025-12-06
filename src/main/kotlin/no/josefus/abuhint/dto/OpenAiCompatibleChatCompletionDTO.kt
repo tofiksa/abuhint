@@ -25,7 +25,8 @@ data class OpenAiCompatibleChatCompletionRequest(
     val messages: List<OpenAiCompatibleChatMessage>,
     val maxCompletionTokens: Int = 16384,
     val temperature: Float = 0.0f,
-    val stream: Boolean = false
+    val stream: Boolean = false,
+    val chatId: String? = null
 )
 
 /**

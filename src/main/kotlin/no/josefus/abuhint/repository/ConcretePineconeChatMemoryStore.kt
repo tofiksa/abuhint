@@ -81,6 +81,12 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
 
             val searchResults: List<EmbeddingMatch<TextSegment>> =
                 searchWithRequest(embeddingStore, queryEmbedding, maxResults = 50, minScore = 0.3, logger = logger)
+                    .sortedWith(
+                        compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
+                            .thenByDescending { match ->
+                                match.embedded().metadata()["ts"]?.toString()?.toLongOrNull() ?: Long.MIN_VALUE
+                            }
+                    )
             
             if (searchResults.isNotEmpty()) {
                 logger.info("Search returned ${searchResults.size} results for query: '${query.take(50)}...' (memoryId: $memoryId, namespace: ${memoryId.ifEmpty { "startup" }})")

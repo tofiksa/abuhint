@@ -15,13 +15,14 @@ class ChatController(private val chatService: ChatService, private val scoreServ
 
     @PostMapping(value = ["/send"], produces = [MediaType.APPLICATION_JSON_VALUE])
     fun sendMessage(
-        @RequestParam(required = false) chatId: String,
+        @RequestParam(required = false) chatId: String?,
         @RequestParam(required = false) credentials : String?,
         @RequestBody message: MessageRequest
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val gameId = scoreService.fetchAndReturnGameId(credentials)
 
-        val message = chatService.processChat(chatId, message.message)
+        val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val message = chatService.processChat(sessionId, message.message)
         val contentItems = List(1) {
             OpenAiCompatibleContentItem(
                 type = "text",
