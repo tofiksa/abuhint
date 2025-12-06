@@ -37,6 +37,7 @@ class ChatService(
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
         logger.info("Relevant messages: $relevantMessages")
 
@@ -73,7 +74,7 @@ class ChatService(
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             return postProcessReply(assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return postProcessReply(assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
+        return postProcessReply(assistant.chat(effectiveChatId, "${formatMessagesToContext(summarizedMessages)}\n$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
@@ -93,6 +94,7 @@ class ChatService(
             )
         val relevantMessages =
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
         logger.info("Relevant messages: $relevantMessages")
 
@@ -129,7 +131,7 @@ class ChatService(
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             return postProcessReply(geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid))
         }
-        return postProcessReply(geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid))
+        return postProcessReply(geminiAssistant.chat(effectiveChatId, "${formatMessagesToContext(summarizedMessages)}\n$enhancedMessage\nUser: $userMessage", uuid))
 
     }
 
@@ -188,6 +190,25 @@ class ChatService(
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
         val maxLen = 1200
         return if (normalized.length > maxLen) normalized.take(maxLen) + " ..." else normalized
+    }
+
+    /**
+     * Summarize older messages if the list is long, keeping the most recent `keepRecent` messages
+     * verbatim and prepending a brief summary of older content.
+     */
+    private fun summarizeIfLong(
+        messages: List<ChatMessage>,
+        tokenizer: Tokenizer,
+        keepRecent: Int,
+        summaryCharLimit: Int
+    ): List<ChatMessage> {
+        if (messages.size <= keepRecent) return messages
+
+        val recent = messages.takeLast(keepRecent)
+        val older = messages.dropLast(keepRecent)
+        val summaryText = older.joinToString(" ") { getMessageText(it) }.take(summaryCharLimit)
+        val summary = SystemMessage("Summary of earlier conversation: $summaryText")
+        return listOf(summary) + recent
     }
 
 
