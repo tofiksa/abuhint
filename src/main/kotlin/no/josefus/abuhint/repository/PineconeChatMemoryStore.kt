@@ -223,8 +223,8 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
                 val formattedMessageText = "$messageType: $messageText"
                 val metadata = Metadata.from(
                     mapOf(
-                        "ts" to timestamp.toString(),
-                        "order" to order.toString()
+                        "ts" to timestamp,
+                        "order" to order
                     )
                 )
                 val textSegment = TextSegment.from(formattedMessageText, metadata)
