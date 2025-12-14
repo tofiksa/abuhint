@@ -10,7 +10,8 @@ class CoachAssistantServiceImpl(
 ) : CoachAssistantService {
 
     override fun chat(chatId: String, userMessage: String, uuid: String): String {
-        return langChain4jAssistant.chat(chatId, userMessage, uuid)
+        val dateTime = java.time.LocalDateTime.now().toString()
+        return langChain4jAssistant.chat(chatId, userMessage, uuid, dateTime)
     }
 
 }

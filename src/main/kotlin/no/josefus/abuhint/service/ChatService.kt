@@ -54,6 +54,7 @@ class ChatService(
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
         val userTokens = tokenizer.estimateTokenCount(userMessage)
         val totalTokensWithUser = totalTokens + userTokens
+        val dateTime = java.time.LocalDateTime.now().toString()
         logger.info("Total tokens in message (context + user): $totalTokensWithUser")
         // Better context trimming
         if (totalTokensWithUser > maxContextTokens) {
@@ -62,6 +63,7 @@ class ChatService(
             val messages = relevantMessages.toList()
             val trimmedMessages = mutableListOf<ChatMessage>()
             var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
+
 
             for (message in messages) {
                 val messageText = getMessageText(message)
@@ -77,13 +79,14 @@ class ChatService(
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             val modelStart = System.nanoTime()
-            val response = assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid)
+
+            val response = assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime)
             val modelMs = (System.nanoTime() - modelStart) / 1_000_000
             logger.info("Model call returned in ${modelMs}ms (trimmed context path)")
             return postProcessReply(response)
         }
         val modelStart = System.nanoTime()
-        val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid)
+        val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime )
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         logger.info("Model call returned in ${modelMs}ms")
         return postProcessReply(response)
