@@ -212,6 +212,11 @@ class ChatService(
     }
 
     private fun postProcessReply(reply: String): String {
+        if (reply.isNullOrBlank()) {
+            val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
+            logger.error("Received null or blank reply from assistant")
+            return "I encountered an error processing your request. Please try again."
+        }
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
         val maxLen = 1200
         return if (normalized.length > maxLen) normalized.take(maxLen) + " ..." else normalized

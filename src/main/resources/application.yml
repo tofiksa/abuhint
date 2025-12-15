@@ -21,11 +21,11 @@ langchain4j:
   open-ai:
     chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-4.1-mini
-      log-requests: true
-      log-responses: true
+      model-name: gpt-5-mini
+      log-requests: false
+      log-responses: false
       temperature: 1
-      max_completion_tokens: 12000
+      max_completion_tokens: 2048
       top-p: 1.0
       frequency-penalty: 0.0
       presence-penalty: 0.0
