@@ -21,11 +21,11 @@ langchain4j:
   open-ai:
     chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-5-mini
+      model-name: gpt-4.1-mini
       log-requests: false
       log-responses: false
       temperature: 1
-      max_completion_tokens: 2048
+      max_completion_tokens: 1024
       top-p: 1.0
       frequency-penalty: 0.0
       presence-penalty: 0.0
@@ -33,7 +33,7 @@ langchain4j:
     api-key: ${GEMINIAI_API_KEY} # Hent nøkkelen fra en miljøvariabel
     project-id: ${GCP_PROJECT_ID} # Hent Google Cloud Project ID fra miljøvariabel
     location: ${GCP_LOCATION} # Hent Google Cloud Lokasjon (f.eks. "us-central1") fra miljøvariabel
-    model-name: gemini-2.0-flash
+    model-name: gemini-2.5-flash
 pinecone:
   api-key: ${PINECONE_API_KEY}
 web-search:

@@ -108,11 +108,11 @@ class WebSearchClient(
             )
         } catch (ex: RestClientResponseException) {
             val tookMs = (System.nanoTime() - start) / 1_000_000
-            log.warn("Web search API returned error status {}", ex.rawStatusCode, ex)
-            val message = if (ex.rawStatusCode == 429) {
+            log.warn("Web search API returned error status {}", ex.statusCode.value(), ex)
+            val message = if (ex.statusCode.value() == 429) {
                 "Søke-API er rate-limited nå, prøv igjen"
             } else {
-                "Søke-API svarte med en feil (${ex.rawStatusCode})"
+                "Søke-API svarte med en feil (${ex.statusCode.value()})"
             }
             WebSearchResponse(
                 results = emptyList(),

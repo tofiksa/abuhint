@@ -15,6 +15,7 @@ class WebSearchTool(
         if (!enabled) {
             return "Web-søk er skrudd av (feature flag)."
         }
+        log.info("søker på nettet: query=\"{}\" maxResults={} locale={}", query.take(200), maxResults, locale)
         if (query.isBlank()) {
             return "Ingen søketekst oppgitt."
         }
@@ -42,6 +43,7 @@ class WebSearchTool(
             }
             r.publishedAt?.let { builder.append("   Publisert: $it\n") }
         }
+        log.info("webSearchTool results: \n{}", builder.toString())
         return builder.toString().trimEnd()
     }
 }

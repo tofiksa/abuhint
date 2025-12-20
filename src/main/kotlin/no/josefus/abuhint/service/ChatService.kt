@@ -21,7 +21,7 @@ class ChatService(
     private val tokenizer: Tokenizer
 ) {
 
-
+    private val log = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
     fun processChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
@@ -49,6 +49,8 @@ class ChatService(
         // Combine context with current message
         val enhancedMessage =
             formatMessagesToContext(summarizedMessages)
+
+        logger.info("Enhanced message {}", enhancedMessage)
 
         // Calculate token count
         val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
@@ -86,6 +88,12 @@ class ChatService(
             return postProcessReply(response)
         }
         val modelStart = System.nanoTime()
+        log.info("meldingen som sendes til langchain4jAssistant: chatId={} userMessage=\"{}\" uuid={} dateTime={}",
+            chatId,
+            userMessage.take(100),
+            uuid,
+            dateTime
+        )
         val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime )
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         logger.info("Model call returned in ${modelMs}ms")
