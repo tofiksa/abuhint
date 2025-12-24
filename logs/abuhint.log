@@ -280,3 +280,41 @@ Current conversation:
 2025-12-24T15:19:20.508+01:00  INFO 4188 --- [http-nio-8080-exec-5] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 5)
 2025-12-24T15:19:20.509+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : LatMeasure: modelMs=7843 (OpenAI/Abu-hint)
 2025-12-24T15:19:20.509+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : LatMeasure: postProcessMs=0 (OpenAI/Abu-hint)
+2025-12-24T15:29:37.230+01:00  INFO 4188 --- [File Watcher] rtingClassPathChangeChangedEventListener : Restarting due to 1 class path change (0 additions, 0 deletions, 1 modification)
+2025-12-24T15:29:37.239+01:00  INFO 4188 --- [Thread-5] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-24T15:29:37.242+01:00  INFO 4188 --- [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2025-12-24T15:29:37.364+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : Starting AbuhintApplicationKt using Java 24.0.2 with PID 4188 (/Users/tofiksahraoui/workprojects/abuhint/target/classes started by tofiksahraoui in /Users/tofiksahraoui/workprojects/abuhint)
+2025-12-24T15:29:37.365+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : No active profile set, falling back to 1 default profile: "default"
+2025-12-24T15:29:37.591+01:00 DEBUG 4188 --- [restartedMain] d.l.s.spring.ClassPathAiServiceScanner   : Identified candidate component class: file [/Users/tofiksahraoui/workprojects/abuhint/target/classes/no/josefus/abuhint/repository/LangChain4jAssistant.class]
+2025-12-24T15:29:37.591+01:00 DEBUG 4188 --- [restartedMain] d.l.s.spring.ClassPathAiServiceScanner   : Identified candidate component class: file [/Users/tofiksahraoui/workprojects/abuhint/target/classes/no/josefus/abuhint/repository/TechAdvisorAssistant.class]
+2025-12-24T15:29:37.679+01:00  INFO 4188 --- [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-12-24T15:29:37.680+01:00  INFO 4188 --- [restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-12-24T15:29:37.681+01:00  INFO 4188 --- [restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.39]
+2025-12-24T15:29:37.696+01:00  INFO 4188 --- [restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-12-24T15:29:37.696+01:00  INFO 4188 --- [restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 328 ms
+2025-12-24T15:29:37.707+01:00  INFO 4188 --- [restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2025-12-24T15:29:37.758+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : Initializing GitHub client with token: gith*************************************************************************************Somd
+2025-12-24T15:29:37.758+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : GitHubBuilder configured with OAuth token.
+2025-12-24T15:29:37.965+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : GitHub client successfully built.
+2025-12-24T15:29:38.019+01:00  INFO 4188 --- [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-12-24T15:29:38.027+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : Started AbuhintApplicationKt in 0.69 seconds (process running for 892.209)
+2025-12-24T15:29:38.028+01:00  INFO 4188 --- [restartedMain] .ConditionEvaluationDeltaLoggingListener : Condition evaluation unchanged
+2025-12-24T15:29:57.614+01:00  INFO 4188 --- [File Watcher] rtingClassPathChangeChangedEventListener : Restarting due to 67 class path changes (0 additions, 0 deletions, 67 modifications)
+2025-12-24T15:29:57.623+01:00  INFO 4188 --- [Thread-16] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-24T15:29:57.626+01:00  INFO 4188 --- [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2025-12-24T15:29:57.715+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : Starting AbuhintApplicationKt using Java 24.0.2 with PID 4188 (/Users/tofiksahraoui/workprojects/abuhint/target/classes started by tofiksahraoui in /Users/tofiksahraoui/workprojects/abuhint)
+2025-12-24T15:29:57.715+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : No active profile set, falling back to 1 default profile: "default"
+2025-12-24T15:29:57.907+01:00 DEBUG 4188 --- [restartedMain] d.l.s.spring.ClassPathAiServiceScanner   : Identified candidate component class: file [/Users/tofiksahraoui/workprojects/abuhint/target/classes/no/josefus/abuhint/repository/LangChain4jAssistant.class]
+2025-12-24T15:29:57.908+01:00 DEBUG 4188 --- [restartedMain] d.l.s.spring.ClassPathAiServiceScanner   : Identified candidate component class: file [/Users/tofiksahraoui/workprojects/abuhint/target/classes/no/josefus/abuhint/repository/TechAdvisorAssistant.class]
+2025-12-24T15:29:57.983+01:00  INFO 4188 --- [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2025-12-24T15:29:57.984+01:00  INFO 4188 --- [restartedMain] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-12-24T15:29:57.984+01:00  INFO 4188 --- [restartedMain] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.39]
+2025-12-24T15:29:57.996+01:00  INFO 4188 --- [restartedMain] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-12-24T15:29:57.996+01:00  INFO 4188 --- [restartedMain] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 278 ms
+2025-12-24T15:29:58.010+01:00  INFO 4188 --- [restartedMain] o.s.b.d.a.OptionalLiveReloadServer       : LiveReload server is running on port 35729
+2025-12-24T15:29:58.065+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : Initializing GitHub client with token: gith*************************************************************************************Somd
+2025-12-24T15:29:58.065+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : GitHubBuilder configured with OAuth token.
+2025-12-24T15:29:58.188+01:00  INFO 4188 --- [restartedMain] n.j.abuhint.configuration.GitHubConfig   : GitHub client successfully built.
+2025-12-24T15:29:58.240+01:00  INFO 4188 --- [restartedMain] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2025-12-24T15:29:58.243+01:00  INFO 4188 --- [restartedMain] n.josefus.abuhint.AbuhintApplicationKt   : Started AbuhintApplicationKt in 0.555 seconds (process running for 912.426)
+2025-12-24T15:29:58.243+01:00  INFO 4188 --- [restartedMain] .ConditionEvaluationDeltaLoggingListener : Condition evaluation unchanged
