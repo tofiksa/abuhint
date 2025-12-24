@@ -44,7 +44,7 @@ class ChatService(
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
         val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
-        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory in ${retrievalMs}ms")
+        logger.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
 
         // Combine context with current message
         val enhancedMessage =
@@ -84,8 +84,12 @@ class ChatService(
 
             val response = assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime)
             val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-            logger.info("Model call returned in ${modelMs}ms (trimmed context path)")
-            return postProcessReply(response)
+            logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint, trimmed path)", modelMs)
+            val postModelStart = System.nanoTime()
+            val postProcessed = postProcessReply(response)
+            val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
+            logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint, trimmed path)", postModelMs)
+            return postProcessed
         }
         val modelStart = System.nanoTime()
         log.info("meldingen som sendes til langchain4jAssistant: chatId={} userMessage=\"{}\" uuid={} dateTime={}",
@@ -96,8 +100,12 @@ class ChatService(
         )
         val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime )
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-        logger.info("Model call returned in ${modelMs}ms")
-        return postProcessReply(response)
+        logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint)", modelMs)
+        val postModelStart = System.nanoTime()
+        val postProcessed = postProcessReply(response)
+        val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
+        logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint)", postModelMs)
+        return postProcessed
 
     }
 
@@ -122,7 +130,7 @@ class ChatService(
             concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
         val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
 
-        logger.info("Retrieved ${relevantMessages.size} relevant messages from chat memory in ${retrievalMs}ms")
+        logger.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
 
         // Combine context with current message
         val enhancedMessage =
@@ -158,14 +166,22 @@ class ChatService(
             val modelStart = System.nanoTime()
             val response = geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime)
             val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-            logger.info("Gemini model call returned in ${modelMs}ms (trimmed context path)")
-            return postProcessReply(response)
+            logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant, trimmed path)", modelMs)
+            val postModelStart = System.nanoTime()
+            val postProcessed = postProcessReply(response)
+            val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
+            logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant, trimmed path)", postModelMs)
+            return postProcessed
         }
         val modelStart = System.nanoTime()
         val response = geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime)
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-        logger.info("Gemini model call returned in ${modelMs}ms")
-        return postProcessReply(response)
+        logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant)", modelMs)
+        val postModelStart = System.nanoTime()
+        val postProcessed = postProcessReply(response)
+        val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
+        logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant)", postModelMs)
+        return postProcessed
 
     }
 

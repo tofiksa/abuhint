@@ -52,6 +52,11 @@ logging:
       ai4j.openai4j: DEBUG
     ai:
       djl: DEBUG
+  file:
+    name: logs/abuhint.log
+  output:
+    ansi:
+      enabled: ALWAYS
 resend:
   api-key: ${RESEND_API_KEY}
   api-url: https://api.resend.com
