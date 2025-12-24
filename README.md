@@ -68,6 +68,11 @@ WEB_SEARCH_TIMEOUT_MS=5000
 WEB_SEARCH_MAX_RESULTS=6
 WEB_SEARCH_LOCALE=nb-NO
 WEB_SEARCH_SEARCH_DEPTH=basic
+
+# Optional fallback
+BRAVE_API_KEY=<your-brave-api-key>
+WEB_SEARCH_CACHE_TTL_S=300
+WEB_SEARCH_SAFE_MODE=moderate
 ```
 
 ### 3. Run the Application
@@ -93,6 +98,7 @@ WEB_SEARCH_SEARCH_DEPTH=basic
 
 ### `application.yml`
 - Centralized configuration for server, database, AI, and email properties.
+- See `docs/web-search.md` for web search env and failure modes.
 
 ---
 
