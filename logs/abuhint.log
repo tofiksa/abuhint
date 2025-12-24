@@ -247,3 +247,36 @@
 2025-12-24T15:16:37.862+01:00  INFO 4188 --- [http-nio-8080-exec-2] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-2 (total: 5)
 2025-12-24T15:16:37.863+01:00  INFO 4188 --- [http-nio-8080-exec-2] no.josefus.abuhint.service.ChatService   : LatMeasure: modelMs=20293 (Gemini/Abdikverrulant)
 2025-12-24T15:16:37.864+01:00  INFO 4188 --- [http-nio-8080-exec-2] no.josefus.abuhint.service.ChatService   : LatMeasure: postProcessMs=0 (Gemini/Abdikverrulant)
+2025-12-24T15:19:06.574+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : No stored messages for chatId=test-latency-abu-1; skipping retrieval to avoid cold-start latency
+2025-12-24T15:19:06.574+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : LatMeasure: retrievalMs=0 matches=0
+2025-12-24T15:19:06.574+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : Enhanced message 
+2025-12-24T15:19:06.575+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : Total tokens in message (context + user): 6
+2025-12-24T15:19:06.575+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : meldingen som sendes til langchain4jAssistant: chatId=test-latency-abu-1 userMessage="Hei, hvordan går det?" uuid=d66af8c9-8442-4a62-86ec-fdec8bd67a0a dateTime=2025-12-24T15:19:06.575054
+2025-12-24T15:19:06.575+01:00  INFO 4188 --- [http-nio-8080-exec-4] n.j.a.c.LangChain4jConfiguration         : Creating chat memory for chatId: test-latency-abu-1 with 100 messages capacity
+2025-12-24T15:19:06.580+01:00  INFO 4188 --- [http-nio-8080-exec-4] n.j.a.c.LangChain4jConfiguration         : Creating Pinecone embedding store for namespace: test-latency-abu-1
+2025-12-24T15:19:09.603+01:00  INFO 4188 --- [http-nio-8080-exec-4] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 1)
+2025-12-24T15:19:10.253+01:00  INFO 4188 --- [http-nio-8080-exec-4] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 2)
+2025-12-24T15:19:11.962+01:00  INFO 4188 --- [http-nio-8080-exec-4] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 3)
+2025-12-24T15:19:11.963+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : LatMeasure: modelMs=5387 (OpenAI/Abu-hint)
+2025-12-24T15:19:11.963+01:00  INFO 4188 --- [http-nio-8080-exec-4] no.josefus.abuhint.service.ChatService   : LatMeasure: postProcessMs=0 (OpenAI/Abu-hint)
+2025-12-24T15:19:12.664+01:00  INFO 4188 --- [http-nio-8080-exec-5] n.j.a.r.ConcretePineconeChatMemoryStore  : Search returned 3 results for query: 'Kan du gi tre raske forslag til teamretro-opplegg?...' (memoryId: test-latency-abu-1, namespace: test-latency-abu-1)
+2025-12-24T15:19:12.665+01:00  INFO 4188 --- [http-nio-8080-exec-5] n.j.a.r.ConcretePineconeChatMemoryStore  : Retrieved 3 relevant messages from Pinecone for ID: test-latency-abu-1 (35 tokens, query: 'Kan du gi tre raske forslag til teamretro-opplegg?...', namespace: test-latency-abu-1)
+2025-12-24T15:19:12.665+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : LatMeasure: retrievalMs=681 matches=3
+2025-12-24T15:19:12.665+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : Enhanced message Previous relevant conversation context (most recent first):
+Assistant: AiMessage { text = "AiMessage { text = "Hei! Jo takk"
+---
+User: User: Hei, hvordan går det?
+---
+System: SystemMessage { text = "SystemMessage { text = "
+        Du heter Abu-hint: en uhøytidelig" }
+---
+
+End of recalled context.
+Current conversation:
+
+2025-12-24T15:19:12.665+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : Total tokens in message (context + user): 92
+2025-12-24T15:19:12.665+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : meldingen som sendes til langchain4jAssistant: chatId=test-latency-abu-1 userMessage="Kan du gi tre raske forslag til teamretro-opplegg?" uuid=f68965b7-8b21-4588-a611-91c37e690317 dateTime=2025-12-24T15:19:12.665749
+2025-12-24T15:19:13.322+01:00  INFO 4188 --- [http-nio-8080-exec-5] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 4)
+2025-12-24T15:19:20.508+01:00  INFO 4188 --- [http-nio-8080-exec-5] n.j.a.r.PineconeChatMemoryStore          : Stored 1 new messages to Pinecone for ID: test-latency-abu-1 (total: 5)
+2025-12-24T15:19:20.509+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : LatMeasure: modelMs=7843 (OpenAI/Abu-hint)
+2025-12-24T15:19:20.509+01:00  INFO 4188 --- [http-nio-8080-exec-5] no.josefus.abuhint.service.ChatService   : LatMeasure: postProcessMs=0 (OpenAI/Abu-hint)
