@@ -34,6 +34,10 @@ langchain4j:
     project-id: ${GCP_PROJECT_ID} # Hent Google Cloud Project ID fra miljøvariabel
     location: ${GCP_LOCATION} # Hent Google Cloud Lokasjon (f.eks. "us-central1") fra miljøvariabel
     model-name: gemini-2.5-flash
+    max-output-tokens: 768
+    timeout:
+      connect: 5s
+      read: 15s
 pinecone:
   api-key: ${PINECONE_API_KEY}
 web-search:
