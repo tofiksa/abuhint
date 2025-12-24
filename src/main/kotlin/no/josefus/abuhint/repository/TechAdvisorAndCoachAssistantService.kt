@@ -8,6 +8,6 @@ interface CoachAssistantService {
 }
 
 interface TechAdvisorService {
-    fun chat(chatId: String, @UserMessage("hei jeg heter {{chatId}}!") userMessage: String, uuid: String): String
+    fun chat(chatId: String, @UserMessage("hei jeg heter {{chatId}}!") userMessage: String, uuid: String, dateTime: String): String
 
 }
