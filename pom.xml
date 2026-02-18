@@ -17,8 +17,8 @@
 	<properties>
 		<java.version>21</java.version>
 		<kotlin.version>2.0.21</kotlin.version>
-		<langchain.version>1.9.1</langchain.version>
-		<langchain.spring.version>1.9.1-beta17</langchain.spring.version>
+		<langchain.version>1.11.0</langchain.version>
+		<langchain.spring.version>1.11.0-beta19</langchain.spring.version>
 	</properties>
 
 	<dependencies>
