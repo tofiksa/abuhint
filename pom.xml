@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.4</version>
+		<version>3.5.3</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>no.josefus</groupId>
@@ -17,8 +17,8 @@
 	<properties>
 		<java.version>21</java.version>
 		<kotlin.version>2.0.21</kotlin.version>
-		<langchain.version>1.9.1</langchain.version>
-		<langchain.spring.version>1.9.1-beta17</langchain.spring.version>
+		<langchain.version>1.11.0</langchain.version>
+		<langchain.spring.version>1.11.0-beta19</langchain.spring.version>
 	</properties>
 
 	<dependencies>
@@ -74,14 +74,14 @@
 		<dependency>
 			<groupId>com.resend</groupId>
 			<artifactId>resend-java</artifactId>
-			<version>4.4.0</version>
+			<version>4.12.0</version>
 		</dependency>
 
 		<!-- Github dependencies -->
 		<dependency>
 			<groupId>org.kohsuke</groupId>
 			<artifactId>github-api</artifactId>
-			<version>1.327</version>
+			<version>1.330</version>
 		</dependency>
 
 		<!-- LangChain4j dependencies -->
@@ -119,7 +119,7 @@
 		<dependency>
 			<groupId>io.pinecone</groupId>
 			<artifactId>pinecone-client</artifactId>
-			<version>1.2.2</version>
+			<version>6.1.0</version>
 		</dependency>
 
 		<!-- Lombok -->
@@ -149,7 +149,7 @@
 		<dependency>
 			<groupId>org.jetbrains.kotlinx</groupId>
 			<artifactId>kotlinx-serialization-json</artifactId>
-			<version>1.9.0</version>
+			<version>1.10.0</version>
 		</dependency>
     </dependencies>
 
