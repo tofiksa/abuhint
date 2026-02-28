@@ -9,6 +9,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.nio.file.Files
 import java.nio.file.Paths
 
 @Component
@@ -46,6 +47,18 @@ class EmailService (
         }
         if (apiKey.isBlank() || from.isBlank()) {
             return "Email sending is not configured. Please set resend API credentials."
+        }
+        if (!attachmentPath.isNullOrBlank()) {
+            val path = Paths.get(attachmentPath)
+            if (!Files.exists(path) || !Files.isRegularFile(path)) {
+                return "Attachment file not found: $attachmentPath"
+            }
+            if (Files.size(path) <= 0L) {
+                return "Attachment file is empty: $attachmentPath"
+            }
+        }
+        if (!attachmentBase64.isNullOrBlank() && attachmentFileName.isNullOrBlank()) {
+            return "Attachment filename is required when using base64 content."
         }
         val attachment = when {
             !attachmentPath.isNullOrBlank() -> {
