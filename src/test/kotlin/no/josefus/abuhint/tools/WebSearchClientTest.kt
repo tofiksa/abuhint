@@ -103,7 +103,7 @@ class WebSearchClientTest {
         val response = localClient.search("whatever")
 
         assertTrue(response.results.isEmpty())
-        assertEquals("Web search API key is not configured", response.error)
+        assertEquals("Web search is not configured", response.error)
     }
 }
 
