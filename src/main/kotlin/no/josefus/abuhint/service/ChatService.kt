@@ -91,6 +91,13 @@ class ChatService(
             logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint, trimmed path)", modelMs)
             val postModelStart = System.nanoTime()
             val postProcessed = postProcessReply(response)
+            logTelemetry(
+                model = "openai",
+                contextMessages = trimmedMessages.size,
+                contextTokens = tokenizer.estimateTokenCount(trimmedContext),
+                response = postProcessed,
+                retrievalMatches = relevantMessages.size
+            )
             val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
             logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint, trimmed path)", postModelMs)
             return postProcessed
@@ -107,6 +114,13 @@ class ChatService(
         logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint)", modelMs)
         val postModelStart = System.nanoTime()
         val postProcessed = postProcessReply(response)
+        logTelemetry(
+            model = "openai",
+            contextMessages = summarizedMessages.size,
+            contextTokens = tokenizer.estimateTokenCount(enhancedMessage),
+            response = postProcessed,
+            retrievalMatches = relevantMessages.size
+        )
         val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
         logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint)", postModelMs)
         return postProcessed
@@ -173,6 +187,13 @@ class ChatService(
             logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant, trimmed path)", modelMs)
             val postModelStart = System.nanoTime()
             val postProcessed = postProcessReply(response)
+            logTelemetry(
+                model = "gemini",
+                contextMessages = trimmedMessages.size,
+                contextTokens = tokenizer.estimateTokenCount(trimmedContext),
+                response = postProcessed,
+                retrievalMatches = relevantMessages.size
+            )
             val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
             logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant, trimmed path)", postModelMs)
             return postProcessed
@@ -183,6 +204,13 @@ class ChatService(
         logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant)", modelMs)
         val postModelStart = System.nanoTime()
         val postProcessed = postProcessReply(response)
+        logTelemetry(
+            model = "gemini",
+            contextMessages = summarizedMessages.size,
+            contextTokens = tokenizer.estimateTokenCount(enhancedMessage),
+            response = postProcessed,
+            retrievalMatches = relevantMessages.size
+        )
         val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
         logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant)", postModelMs)
         return postProcessed
@@ -269,6 +297,30 @@ class ChatService(
             .containsMatchIn(firstSentence)
         if (alreadyAcknowledged) return text
         return "Got it. $trimmed"
+    }
+
+    private fun logTelemetry(
+        model: String,
+        contextMessages: Int,
+        contextTokens: Int,
+        response: String,
+        retrievalMatches: Int
+    ) {
+        val responseChars = response.length
+        val responseTokens = (responseChars / 4).coerceAtLeast(1)
+        val recallRate = if (retrievalMatches > 0) 1.0 else 0.0
+        val hasFollowUpQuestion = response.contains('?')
+        log.info(
+            "Telemetry: model={} recallMatches={} recallRate={} contextMessages={} contextTokens={} responseChars={} responseTokens={} followUpQuestion={}",
+            model,
+            retrievalMatches,
+            recallRate,
+            contextMessages,
+            contextTokens,
+            responseChars,
+            responseTokens,
+            hasFollowUpQuestion
+        )
     }
 
     /**
