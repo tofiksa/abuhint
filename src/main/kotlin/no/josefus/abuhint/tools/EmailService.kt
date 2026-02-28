@@ -2,12 +2,14 @@ package no.josefus.abuhint.tools
 
 import com.resend.*
 import com.resend.core.exception.ResendException
+import com.resend.services.emails.model.Attachment
 import com.resend.services.emails.model.CreateEmailOptions
 import dev.langchain4j.agent.tool.Tool
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.nio.file.Paths
 
 @Component
 class EmailService (
@@ -24,18 +26,55 @@ class EmailService (
      * @param html The HTML content of the email.
      */
     @Tool(name = "sendEmail")
-    fun sendEmail(html: String, to: String, confirm: Boolean = false): String {
+    fun sendEmail(
+        html: String,
+        to: String,
+        attachmentPath: String? = null,
+        attachmentBase64: String? = null,
+        attachmentFileName: String? = null,
+        attachmentContentType: String? = null,
+        confirm: Boolean = false
+    ): String {
         if (!confirm) {
-            return "I can send the email to $to. Reply with confirmation to proceed."
+            val attachmentNote = when {
+                !attachmentPath.isNullOrBlank() -> " with attachment ${Paths.get(attachmentPath).fileName}"
+                !attachmentBase64.isNullOrBlank() -> " with a base64 attachment"
+                else -> ""
+            }
+            val contentTypeNote = attachmentContentType?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+            return "I can send the email to $to$attachmentNote$contentTypeNote. Reply with confirmation to proceed."
         }
         if (apiKey.isBlank() || from.isBlank()) {
             return "Email sending is not configured. Please set resend API credentials."
+        }
+        val attachment = when {
+            !attachmentPath.isNullOrBlank() -> {
+                val resolvedFileName = attachmentFileName?.takeIf { it.isNotBlank() }
+                    ?: Paths.get(attachmentPath).fileName.toString()
+                Attachment.builder()
+                    .path(attachmentPath)
+                    .fileName(resolvedFileName)
+                    .build()
+            }
+            !attachmentBase64.isNullOrBlank() -> {
+                val resolvedFileName = attachmentFileName?.takeIf { it.isNotBlank() } ?: "attachment"
+                Attachment.builder()
+                    .content(attachmentBase64)
+                    .fileName(resolvedFileName)
+                    .build()
+            }
+            else -> null
         }
         val params = CreateEmailOptions.builder()
             .from(from)
             .to(to)
             .subject(subject)
             .html(html)
+            .apply {
+                if (attachment != null) {
+                    attachments(attachment)
+                }
+            }
             .build()
 
         return try {
