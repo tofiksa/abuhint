@@ -47,13 +47,23 @@ class WebSearchClient(
     )
 
     fun search(query: String, maxResults: Int? = null, locale: String? = null): WebSearchResponse {
+        val provider = properties.provider.lowercase()
+        if (provider != "tavily") {
+            return WebSearchResponse(
+                results = emptyList(),
+                provider = properties.provider,
+                tookMs = 0,
+                cacheHit = false,
+                error = "Web search provider is not supported: ${properties.provider}"
+            )
+        }
         if (properties.apiKey.isBlank()) {
             return WebSearchResponse(
                 results = emptyList(),
                 provider = properties.provider,
                 tookMs = 0,
                 cacheHit = false,
-                error = "Web search API key is not configured"
+                error = "Web search is not configured"
             )
         }
 
@@ -160,4 +170,3 @@ private data class TavilyResponse(
     val query: String? = null,
     val cacheHit: Boolean = false
 )
-

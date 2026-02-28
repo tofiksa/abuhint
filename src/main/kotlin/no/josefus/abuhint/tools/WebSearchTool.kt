@@ -13,6 +13,7 @@ class WebSearchTool(
     @Tool("Utfør et kort websøk for å hente oppdatert informasjon")
     fun searchWeb(query: String, maxResults: Int? = null, locale: String? = null): String {
         if (!enabled) {
+            log.info("webSearchTool disabled (feature flag) for query=\"{}\"", query.take(200))
             return "Web-søk er skrudd av (feature flag)."
         }
         log.info("søker på nettet: query=\"{}\" maxResults={} locale={}", query.take(200), maxResults, locale)
@@ -21,10 +22,17 @@ class WebSearchTool(
         }
         val response = client.search(query, maxResults = maxResults, locale = locale)
         if (response.error != null) {
-            return "Klarte ikke å søke på nettet: ${response.error}"
+            return when {
+                response.error.contains("not configured", ignoreCase = true) ->
+                    "Web-søk ikke konfigurert."
+                response.error.contains("rate", ignoreCase = true) ->
+                    "Søk er midlertidig begrenset, forsøker senere."
+                else ->
+                    "Klarte ikke hente resultater nå (${response.error}); svarer uten eksterne data."
+            }
         }
         if (response.results.isEmpty()) {
-            return "Fant ingen relevante treff for: \"$query\"."
+            return "Fant ingen oppdaterte kilder; sier ifra og svarer uten eksterne data."
         }
         val top = response.results.take(maxResults ?: client.properties.maxResults)
         log.info(
@@ -47,4 +55,3 @@ class WebSearchTool(
         return builder.toString().trimEnd()
     }
 }
-
