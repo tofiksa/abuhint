@@ -1,5 +1,6 @@
 package no.josefus.abuhint.dto
 
+import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser
@@ -26,6 +27,7 @@ data class OpenAiCompatibleChatCompletionRequest(
     val maxCompletionTokens: Int = 16384,
     val temperature: Float = 0.0f,
     val stream: Boolean = false,
+    @JsonAlias("chat_id")
     val chatId: String? = null
 )
 
@@ -190,4 +192,3 @@ class ContentDeserializer : JsonDeserializer<List<OpenAiCompatibleContentItem>>(
         }
     }
 }
-

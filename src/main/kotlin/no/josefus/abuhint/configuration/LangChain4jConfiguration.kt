@@ -5,7 +5,7 @@ import dev.langchain4j.memory.chat.ChatMemoryProvider
 import dev.langchain4j.memory.chat.MessageWindowChatMemory
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
-import no.josefus.abuhint.service.SimpleTokenizer
+import no.josefus.abuhint.service.ModelAwareTokenizer
 import no.josefus.abuhint.service.Tokenizer
 import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
@@ -88,10 +88,13 @@ public class LangChain4jConfiguration {
         return PowerPointGeneratorTool()
     }
 
-    @Bean
-    fun tokenizer(): Tokenizer {
-        // In LangChain4j 1.9+, Tokenizer is not available as a separate class
-        // Use a simple character-based approximation
-        return SimpleTokenizer()
+    @Bean(name = ["openAiTokenizer"])
+    fun openAiTokenizer(): Tokenizer {
+        return ModelAwareTokenizer("gpt-4o")
+    }
+
+    @Bean(name = ["geminiTokenizer"])
+    fun geminiTokenizer(): Tokenizer {
+        return ModelAwareTokenizer("gemini-1.5-pro")
     }
 }

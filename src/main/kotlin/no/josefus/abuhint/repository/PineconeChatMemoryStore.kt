@@ -27,6 +27,8 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
     // Message counter for unique IDs
     private val messageCounters = ConcurrentHashMap<String, AtomicLong>()
 
+    private val summaryStoredUpTo = ConcurrentHashMap<String, Int>()
+
     @org.springframework.beans.factory.annotation.Value("\${pinecone.load-recent-on-cache-miss:false}")
     private var loadRecentOnCacheMiss: Boolean = false
 
@@ -195,14 +197,16 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
                 val newMessages = messages.subList(previousCount, currentCount)
                 storeMessagesToPinecone(id, newMessages, embeddingStore, embeddingModel, previousCount)
                 lastStoredCount[id] = currentCount
-                
+
                 logger.info("Stored ${newMessages.size} new messages to Pinecone for ID: $id (total: $currentCount)")
+                maybeStoreSummary(id, messages, embeddingStore, embeddingModel, currentCount)
             } else if (currentCount == previousCount && previousCount == 0 && messages.isNotEmpty()) {
                 // Special case: if we loaded messages from Pinecone but lastStoredCount wasn't set,
                 // we need to check if these messages are already in Pinecone
                 // For now, we'll assume they are and just update the count
                 lastStoredCount[id] = currentCount
                 logger.debug("Updated lastStoredCount for ID: $id to $currentCount (messages were loaded from Pinecone)")
+                maybeStoreSummary(id, messages, embeddingStore, embeddingModel, currentCount)
             } else {
                 // If count decreased or stayed same, update cache only
                 logger.debug("No new messages to store for ID: $id (count: $currentCount, previous: $previousCount)")
@@ -259,6 +263,56 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
                 logger.error("Failed to store individual message to Pinecone: ${e.message}", e)
             }
         }
+    }
+
+    private fun maybeStoreSummary(
+        memoryId: String,
+        messages: List<ChatMessage>,
+        embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
+        embeddingModel: dev.langchain4j.model.embedding.EmbeddingModel,
+        currentCount: Int
+    ) {
+        val summaryThreshold = 50
+        val keepRecent = 10
+        val summaryStep = 25
+        val lastSummaryAt = summaryStoredUpTo[memoryId] ?: 0
+
+        if (currentCount < summaryThreshold) return
+        if (currentCount - lastSummaryAt < summaryStep) return
+
+        val summary = buildSummary(messages, keepRecent)
+        if (summary.isBlank()) return
+
+        val summaryText = "SYSTEM: Summary (through turn ${currentCount - keepRecent}): $summary"
+        val metadata = Metadata.from(
+            mapOf(
+                "ts" to System.currentTimeMillis(),
+                "order" to currentCount.toLong(),
+                "summary" to true
+            )
+        )
+        val textSegment = TextSegment.from(summaryText, metadata)
+        try {
+            val embedding = embeddingModel.embed(textSegment).content()
+            embeddingStore.add(embedding, textSegment)
+            summaryStoredUpTo[memoryId] = currentCount
+            logger.info("Stored summary for ID: $memoryId (through turn ${currentCount - keepRecent})")
+        } catch (e: Exception) {
+            logger.error("Failed to store summary for ID: $memoryId: ${e.message}", e)
+        }
+    }
+
+    private fun buildSummary(messages: List<ChatMessage>, keepRecent: Int): String {
+        if (messages.size <= keepRecent) return ""
+        val older = messages.dropLast(keepRecent)
+        val limited = older.takeLast(40)
+        val parts = limited.mapNotNull { message ->
+            val content = getMessageText(message).trim()
+            if (content.isBlank()) return@mapNotNull null
+            val prefix = normalizeMessageType(message.type().toString())
+            "$prefix: ${content.take(200)}"
+        }
+        return parts.joinToString(" | ").take(1200)
     }
 
     override fun deleteMessages(memoryId: Any) {

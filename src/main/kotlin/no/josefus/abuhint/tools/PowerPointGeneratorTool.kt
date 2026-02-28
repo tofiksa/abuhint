@@ -40,8 +40,15 @@ class PowerPointGeneratorTool {
     fun generatePresentation(
         title: String,
         slidesJson: String, // JSON string of slide content
-        outputPath: String = "generated_presentation.pptx"
+        outputPath: String = "generated_presentation.pptx",
+        confirm: Boolean = false
     ): String {
+        if (!confirm) {
+            return "I can generate the PowerPoint at $outputPath. Reply with confirmation to proceed."
+        }
+        if (outputPath.isBlank()) {
+            return "Unable to generate presentation: outputPath is blank."
+        }
         return try {
             val slides = parseSlideContent(slidesJson)
             createPresentation(title, slides, outputPath)
@@ -56,8 +63,15 @@ class PowerPointGeneratorTool {
         presentationTitle: String,
         slideTitle: String,
         bulletPoints: String, // Comma-separated bullet points
-        outputPath: String = "simple_presentation.pptx"
+        outputPath: String = "simple_presentation.pptx",
+        confirm: Boolean = false
     ): String {
+        if (!confirm) {
+            return "I can generate the PowerPoint at $outputPath. Reply with confirmation to proceed."
+        }
+        if (outputPath.isBlank()) {
+            return "Unable to generate presentation: outputPath is blank."
+        }
         return try {
             val points = bulletPoints.split(",").map { it.trim() }
             val slides = listOf(
@@ -209,4 +223,3 @@ class PowerPointGeneratorTool {
         }
     }
 }
-

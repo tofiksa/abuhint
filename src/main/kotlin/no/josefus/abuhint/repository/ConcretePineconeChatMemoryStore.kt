@@ -52,6 +52,36 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
                 emptyList()
             }
         }
+
+        internal fun orderByScoreThenRecencyAndDedupe(
+            matches: List<EmbeddingMatch<TextSegment>>
+        ): List<EmbeddingMatch<TextSegment>> {
+            return matches
+                .groupBy { normalizeForDedupe(it.embedded().text()) }
+                .mapNotNull { (_, groupedMatches) ->
+                    groupedMatches.maxWithOrNull(
+                        compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
+                            .thenByDescending { match ->
+                                val meta = match.embedded().metadata()
+                                meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
+                            }
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
+                        .thenByDescending { match ->
+                            val meta = match.embedded().metadata()
+                            meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
+                        }
+                )
+        }
+
+        private fun normalizeForDedupe(text: String): String {
+            return text
+                .lowercase()
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
     }
 
     /**
@@ -87,28 +117,18 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
                 rawResults = searchWithRequest(embeddingStore, queryEmbedding, maxResults = 20, minScore = 0.0, logger = logger)
             }
 
-            // Always include the last few recent turns, then fall back to semantic ranking
-            val lastNTurns = rawResults
-                .sortedByDescending { it.embedded().metadata().getLong("ts") ?: Long.MIN_VALUE }
-                .take(4)
-
-            val searchResults: List<EmbeddingMatch<TextSegment>> =
-                (lastNTurns + rawResults
-                    .sortedWith(
-                        compareByDescending<EmbeddingMatch<TextSegment>> { it.score() }
-                            .thenByDescending { match ->
-                                val meta = match.embedded().metadata()
-                                meta.getLong("ts") ?: Long.MIN_VALUE
-                            }
-                    ))
-                    .fold(mutableListOf<EmbeddingMatch<TextSegment>>() to mutableSetOf<String>()) { acc, match ->
-                        val (list, seen) = acc
-                        val text = match.embedded().text()
-                        if (seen.add(text)) {
-                            list.add(match)
-                        }
-                        acc
-                    }.first
+            val recentMatches = loadRecentMatches(
+                memoryId = memoryId,
+                embeddingStore = embeddingStore,
+                embeddingModel = embeddingModel,
+                maxRecent = 3
+            )
+            val semanticResults = orderByScoreThenRecencyAndDedupe(rawResults)
+            val summaryMatch = loadPinnedSummary(
+                embeddingStore = embeddingStore,
+                embeddingModel = embeddingModel
+            )
+            val searchResults = mergePinnedWithResults(summaryMatch, mergeRecentWithSemantic(recentMatches, semanticResults))
             
             if (searchResults.isNotEmpty()) {
                 logger.info("Search returned ${searchResults.size} results for query: '${query.take(50)}...' (memoryId: $memoryId, namespace: ${memoryId.ifEmpty { "startup" }})")
@@ -149,6 +169,95 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             e.printStackTrace()
             return emptyList()
         }
+    }
+
+    private fun loadRecentMatches(
+        memoryId: String,
+        embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
+        embeddingModel: dev.langchain4j.model.embedding.EmbeddingModel,
+        maxRecent: Int
+    ): List<EmbeddingMatch<TextSegment>> {
+        val queryText = "conversation chat message user assistant"
+        val queryEmbedding = embeddingModel.embed(queryText).content()
+        val recentMatches = searchWithRequest(
+            embeddingStore = embeddingStore,
+            queryEmbedding = queryEmbedding,
+            maxResults = 50,
+            minScore = 0.0,
+            logger = logger
+        )
+        return recentMatches
+            .sortedByDescending { match ->
+                val meta = match.embedded().metadata()
+                meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
+            }
+            .take(maxRecent)
+    }
+
+    private fun mergeRecentWithSemantic(
+        recentMatches: List<EmbeddingMatch<TextSegment>>,
+        semanticMatches: List<EmbeddingMatch<TextSegment>>
+    ): List<EmbeddingMatch<TextSegment>> {
+        val merged = mutableListOf<EmbeddingMatch<TextSegment>>()
+        val seen = mutableSetOf<String>()
+
+        fun addIfNew(match: EmbeddingMatch<TextSegment>) {
+            val key = match.embedded().text()
+                .lowercase()
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (seen.add(key)) {
+                merged.add(match)
+            }
+        }
+
+        recentMatches.forEach { addIfNew(it) }
+        semanticMatches.forEach { addIfNew(it) }
+        return merged
+    }
+
+    private fun loadPinnedSummary(
+        embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
+        embeddingModel: dev.langchain4j.model.embedding.EmbeddingModel
+    ): EmbeddingMatch<TextSegment>? {
+        val queryEmbedding = embeddingModel.embed("summary of earlier conversation").content()
+        val matches = searchWithRequest(
+            embeddingStore = embeddingStore,
+            queryEmbedding = queryEmbedding,
+            maxResults = 20,
+            minScore = 0.0,
+            logger = logger
+        )
+        val summaries = matches.filter { match ->
+            match.embedded().text().startsWith("SYSTEM: Summary")
+        }
+        return summaries.maxByOrNull { match ->
+            val meta = match.embedded().metadata()
+            meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
+        }
+    }
+
+    private fun mergePinnedWithResults(
+        pinned: EmbeddingMatch<TextSegment>?,
+        results: List<EmbeddingMatch<TextSegment>>
+    ): List<EmbeddingMatch<TextSegment>> {
+        if (pinned == null) return results
+        val merged = mutableListOf<EmbeddingMatch<TextSegment>>()
+        val seen = mutableSetOf<String>()
+
+        fun addIfNew(match: EmbeddingMatch<TextSegment>) {
+            val key = match.embedded().text()
+                .lowercase()
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (seen.add(key)) {
+                merged.add(match)
+            }
+        }
+
+        addIfNew(pinned)
+        results.forEach { addIfNew(it) }
+        return merged
     }
 
     /**

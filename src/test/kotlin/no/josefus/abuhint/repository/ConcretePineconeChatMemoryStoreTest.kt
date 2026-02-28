@@ -1,6 +1,7 @@
 package no.josefus.abuhint.repository
 
 import dev.langchain4j.data.embedding.Embedding
+import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingMatch
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
@@ -29,6 +30,55 @@ class ConcretePineconeChatMemoryStoreTest {
         assertEquals(0.42, store.lastRequest?.minScore())
     }
 
+    @Test
+    fun `orderByScoreThenRecencyAndDedupe keeps best match and sorts by score then recency`() {
+        val embedding = Embedding.from(floatArrayOf(0.1f))
+        val matches = listOf(
+            EmbeddingMatch(
+                0.6,
+                "dup-older",
+                embedding,
+                TextSegment.from("USER: same", Metadata.from(mapOf("order" to 2L)))
+            ),
+            EmbeddingMatch(
+                0.6,
+                "dup-newer",
+                embedding,
+                TextSegment.from("USER: same", Metadata.from(mapOf("order" to 5L)))
+            ),
+            EmbeddingMatch(
+                0.9,
+                "top-score",
+                embedding,
+                TextSegment.from("USER: high", Metadata.from(mapOf("order" to 1L)))
+            ),
+            EmbeddingMatch(
+                0.8,
+                "recent-medium",
+                embedding,
+                TextSegment.from("USER: medium-recent", Metadata.from(mapOf("order" to 9L)))
+            ),
+            EmbeddingMatch(
+                0.8,
+                "older-medium",
+                embedding,
+                TextSegment.from("USER: medium-older", Metadata.from(mapOf("order" to 3L)))
+            )
+        )
+
+        val ordered = ConcretePineconeChatMemoryStore.orderByScoreThenRecencyAndDedupe(matches)
+
+        assertEquals(
+            listOf(
+                "USER: high",
+                "USER: medium-recent",
+                "USER: medium-older",
+                "USER: same"
+            ),
+            ordered.map { it.embedded().text() }
+        )
+    }
+
     private class RecordingEmbeddingStore : EmbeddingStore<TextSegment> {
         var lastRequest: EmbeddingSearchRequest? = null
 
@@ -54,4 +104,3 @@ class ConcretePineconeChatMemoryStoreTest {
         override fun addAll(embeddings: List<Embedding>): List<String> = emptyList()
     }
 }
-

@@ -11,6 +11,7 @@ import java.util.UUID
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.repository.LangChain4jAssistant
 import no.josefus.abuhint.repository.TechAdvisorAssistant
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 
 @Service
@@ -18,15 +19,18 @@ class ChatService(
     private val assistant: LangChain4jAssistant,
     private val geminiAssistant: TechAdvisorAssistant,
     private val concretePineconeChatMemoryStore: ConcretePineconeChatMemoryStore,
-    private val tokenizer: Tokenizer
+    @Qualifier("openAiTokenizer")
+    private val openAiTokenizer: Tokenizer,
+    @Qualifier("geminiTokenizer")
+    private val geminiTokenizer: Tokenizer
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
     fun processChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 6000
-        val tokenizer = this.tokenizer
+        val maxContextTokens = 5000
+        val tokenizer = openAiTokenizer
         
         // Require a unique chatId per session to avoid cross-talk
         val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
@@ -112,8 +116,8 @@ class ChatService(
     fun processGeminiChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 6000
-        val tokenizer = this.tokenizer
+        val maxContextTokens = 5000
+        val tokenizer = geminiTokenizer
         
         val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
             logger.warn("No chatId provided; generated session id $it to isolate conversation.")
@@ -220,19 +224,19 @@ class ChatService(
     }
 
     private fun formatMessagesToContext(messages: List<ChatMessage>): String {
+        if (messages.isEmpty()) return ""
         val contextBuilder = StringBuilder()
-        if (messages.isNotEmpty()) {
-            contextBuilder.append("Previous relevant conversation context (most recent first):\n")
-            messages.forEach { message ->
-                val text = getMessageText(message)
-                when (message) {
-                    is UserMessage -> contextBuilder.append("User: $text\n---\n")
-                    is AiMessage -> contextBuilder.append("Assistant: $text\n---\n")
-                    is SystemMessage -> contextBuilder.append("System: $text\n---\n")
-                }
+        contextBuilder.append("Context recap (most recent first):\n")
+        messages.forEachIndexed { index, message ->
+            val text = getMessageText(message)
+            val recencyTag = "#${index + 1}"
+            when (message) {
+                is UserMessage -> contextBuilder.append("$recencyTag User: $text\n")
+                is AiMessage -> contextBuilder.append("$recencyTag Assistant: $text\n")
+                is SystemMessage -> contextBuilder.append("$recencyTag System: $text\n")
             }
-            contextBuilder.append("\nEnd of recalled context.\nCurrent conversation:\n")
         }
+        contextBuilder.append("End of recap.\nCurrent conversation:\n")
         return contextBuilder.toString()
     }
 
@@ -243,8 +247,28 @@ class ChatService(
             return "I encountered an error processing your request. Please try again."
         }
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
-        val maxLen = 1200
-        return if (normalized.length > maxLen) normalized.take(maxLen) + " ..." else normalized
+        val acknowledged = ensureAcknowledgement(normalized)
+        val softLimit = 700
+        val hardLimit = 1200
+        val trimmed = if (acknowledged.length > hardLimit) {
+            acknowledged.take(hardLimit).trimEnd() + " ..."
+        } else {
+            acknowledged
+        }
+        return if (trimmed.length > softLimit) {
+            trimmed.take(softLimit).trimEnd() + " ..."
+        } else {
+            trimmed
+        }
+    }
+
+    private fun ensureAcknowledgement(text: String): String {
+        val trimmed = text.trimStart()
+        val firstSentence = trimmed.substringBefore("\n").substringBefore(".")
+        val alreadyAcknowledged = Regex("^(got it|ok|okay|sure|understood|thanks)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(firstSentence)
+        if (alreadyAcknowledged) return text
+        return "Got it. $trimmed"
     }
 
     /**

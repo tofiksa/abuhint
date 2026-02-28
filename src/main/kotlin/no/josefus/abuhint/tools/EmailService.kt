@@ -24,7 +24,13 @@ class EmailService (
      * @param html The HTML content of the email.
      */
     @Tool(name = "sendEmail")
-    fun sendEmail(html: String, to: String){
+    fun sendEmail(html: String, to: String, confirm: Boolean = false): String {
+        if (!confirm) {
+            return "I can send the email to $to. Reply with confirmation to proceed."
+        }
+        if (apiKey.isBlank() || from.isBlank()) {
+            return "Email sending is not configured. Please set resend API credentials."
+        }
         val params = CreateEmailOptions.builder()
             .from(from)
             .to(to)
@@ -35,8 +41,10 @@ class EmailService (
         return try {
             val data = resend.emails().send(params)
             logger.info("Email sent successfully with ID: ${data.id}")
+            "Email sent successfully."
         } catch (e: ResendException) {
-            print("Failed to send email: ${e.message}")
+            logger.error("Failed to send email: ${e.message}", e)
+            "Failed to send email: ${e.message}"
         }
     }
 }
