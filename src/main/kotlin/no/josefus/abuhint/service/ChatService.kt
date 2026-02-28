@@ -254,10 +254,10 @@ class ChatService(
     private fun formatMessagesToContext(messages: List<ChatMessage>): String {
         if (messages.isEmpty()) return ""
         val contextBuilder = StringBuilder()
-        contextBuilder.append("Context recap (most recent first):\n")
+        contextBuilder.append("Context recap (most recent first). Use citation tags like [memory#1] when referring to these turns:\n")
         messages.forEachIndexed { index, message ->
             val text = getMessageText(message)
-            val recencyTag = "#${index + 1}"
+            val recencyTag = "[memory#${index + 1}]"
             when (message) {
                 is UserMessage -> contextBuilder.append("$recencyTag User: $text\n")
                 is AiMessage -> contextBuilder.append("$recencyTag Assistant: $text\n")
