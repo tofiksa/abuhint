@@ -1,225 +1,177 @@
 package no.josefus.abuhint.tools
 
+import dev.langchain4j.agent.tool.P
 import dev.langchain4j.agent.tool.Tool
-import org.apache.poi.xslf.usermodel.*
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import org.apache.poi.sl.usermodel.TextParagraph
+import no.josefus.abuhint.service.S3FileLinkService
+import org.apache.poi.sl.usermodel.TextParagraph.TextAlign
+import org.apache.poi.xslf.usermodel.XMLSlideShow
+import org.apache.poi.xslf.usermodel.XSLFSlide
+import org.apache.poi.xslf.usermodel.XSLFTextBox
+import org.apache.poi.xslf.usermodel.XSLFTextRun
 import java.awt.Color
-import java.awt.Rectangle
+import java.awt.geom.Rectangle2D
 import java.io.FileOutputStream
+import java.nio.file.Files
 
+enum class BlockType { PARAGRAPH, BULLET }
 
-@Serializable
-data class SlideContent(
-    val title: String,
-    val bulletPoints: List<String> = emptyList(),
-    val content: String = "",
-    val slideType: SlideType = SlideType.TITLE_AND_CONTENT
+data class ContentBlock(
+    val text: String,
+    val type: BlockType = BlockType.BULLET,
+    val level: Int = 1  // 1 = top-level bullet, 2 = sub-bullet (only used for BULLET blocks)
 )
 
-@Serializable
-enum class SlideType {
-    TITLE_SLIDE,
-    TITLE_AND_CONTENT,
-    CONTENT_ONLY,
-    BULLET_POINTS
-}
-
-@Serializable
-data class PresentationRequest(
+data class Slide(
     val title: String,
-    val slides: List<SlideContent>,
-    val outputPath: String = "presentation.pptx",
-    val theme: String = "default"
+    val subtitle: String = "",                  // shown below the title on the cover slide
+    val blocks: List<ContentBlock> = emptyList()
 )
 
-class PowerPointGeneratorTool {
+class PowerPointGeneratorTool(
+    private val s3FileLinkService: S3FileLinkService
+) {
+    private val pptxContentType =
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
-    @Tool("Generer en PowerPoint-presentasjon med spesifiserte lysbilder og innhold")
+    @Tool(
+        "Generate a PowerPoint presentation and upload it for download. " +
+        "The FIRST slide is always the cover slide — set its 'subtitle' for a subheading. " +
+        "All other slides have a 'title' and a list of 'blocks'. " +
+        "Each block is either PARAGRAPH (prose text) or BULLET (bullet point). " +
+        "Use level=1 for top-level bullets and level=2 for sub-bullets. " +
+        "Blocks appear in the order given, so paragraphs and bullets can be freely mixed on one slide."
+    )
     fun generatePresentation(
-        title: String,
-        slidesJson: String, // JSON string of slide content
-        outputPath: String = "generated_presentation.pptx",
-        confirm: Boolean = false
+        @P("Title of the presentation, also used as the filename") presentationTitle: String,
+        @P("Slides in display order. First slide is the cover.") slides: List<Slide>,
+        @P("Set to true once the user has confirmed they want to proceed") confirm: Boolean = false
     ): String {
         if (!confirm) {
-            return "I can generate the PowerPoint at $outputPath. Reply with confirmation to proceed."
+            val summary = slides.joinToString(", ") { "\"${it.title}\"" }
+            return "I'll create a ${ slides.size }-slide presentation \"$presentationTitle\": $summary. Confirm to proceed."
         }
-        if (outputPath.isBlank()) {
-            return "Unable to generate presentation: outputPath is blank."
+        if (!s3FileLinkService.isConfigured()) {
+            return "Unable to generate presentation: S3 storage is not configured."
         }
         return try {
-            val slides = parseSlideContent(slidesJson)
-            createPresentation(title, slides, outputPath)
-            "Successfully created PowerPoint presentation: $outputPath"
+            val url = buildAndUpload(presentationTitle, slides)
+                ?: return "Failed to upload the presentation."
+            "Your presentation is ready: $url"
         } catch (e: Exception) {
-            "Error creating presentation: ${e.message}"
+            "Error generating presentation: ${e.message}"
         }
     }
 
-    @Tool("Create a simple presentation with title and bullet points")
-    fun createSimplePresentation(
-        presentationTitle: String,
-        slideTitle: String,
-        bulletPoints: String, // Comma-separated bullet points
-        outputPath: String = "simple_presentation.pptx",
-        confirm: Boolean = false
-    ): String {
-        if (!confirm) {
-            return "I can generate the PowerPoint at $outputPath. Reply with confirmation to proceed."
-        }
-        if (outputPath.isBlank()) {
-            return "Unable to generate presentation: outputPath is blank."
-        }
+    /** Called directly by PowerPointEmailTool — bypasses the confirm gate. */
+    internal fun buildAndUpload(presentationTitle: String, slides: List<Slide>): String? {
+        if (!s3FileLinkService.isConfigured()) return null
+        val fileName = presentationTitle.replace(Regex("[^A-Za-z0-9_-]"), "_").lowercase() + ".pptx"
+        val tempPath = Files.createTempFile("abuhint-pptx-", ".pptx")
         return try {
-            val points = bulletPoints.split(",").map { it.trim() }
-            val slides = listOf(
-                SlideContent(presentationTitle, slideType = SlideType.TITLE_SLIDE),
-                SlideContent(slideTitle, points, slideType = SlideType.BULLET_POINTS)
-            )
-            createPresentation(presentationTitle, slides, outputPath)
-            "Successfully created simple presentation: $outputPath"
-        } catch (e: Exception) {
-            "Error creating simple presentation: ${e.message}"
+            buildPresentation(slides, tempPath.toString())
+            s3FileLinkService.uploadAndPresign(tempPath, fileName, pptxContentType)
+        } finally {
+            Files.deleteIfExists(tempPath)
         }
     }
 
-    private fun createPresentation(
-        title: String,
-        slides: List<SlideContent>,
-        outputPath: String
-    ) {
-        val ppt = XMLSlideShow()
+    private fun buildPresentation(slides: List<Slide>, outputPath: String) {
+        XMLSlideShow().use { ppt ->
+            val W = ppt.pageSize.width.toDouble()
+            val H = ppt.pageSize.height.toDouble()
+            slides.forEachIndexed { i, slide ->
+                if (i == 0) renderCoverSlide(ppt, slide, W, H)
+                else renderContentSlide(ppt, slide, W, H)
+            }
+            FileOutputStream(outputPath).use { ppt.write(it) }
+        }
+    }
 
-        slides.forEach { slideContent ->
-            when (slideContent.slideType) {
-                SlideType.TITLE_SLIDE -> createTitleSlide(ppt, slideContent)
-                SlideType.TITLE_AND_CONTENT -> createTitleAndContentSlide(ppt, slideContent)
-                SlideType.BULLET_POINTS -> createBulletPointSlide(ppt, slideContent)
-                SlideType.CONTENT_ONLY -> createContentSlide(ppt, slideContent)
+    // ── Slide renderers ────────────────────────────────────────────────────────
+
+    private fun renderCoverSlide(ppt: XMLSlideShow, slide: Slide, W: Double, H: Double) {
+        val s = ppt.createSlide()
+        textBox(s, W * 0.10, H * 0.30, W * 0.80, H * 0.25) { box ->
+            paragraph(box, TextAlign.CENTER) {
+                setText(slide.title)
+                fontSize = 40.0
+                isBold = true
+                setFontColor(Color(30, 30, 80))
+            }
+        }
+        if (slide.subtitle.isNotBlank()) {
+            textBox(s, W * 0.10, H * 0.58, W * 0.80, H * 0.15) { box ->
+                paragraph(box, TextAlign.CENTER) {
+                    setText(slide.subtitle)
+                    fontSize = 24.0
+                    setFontColor(Color.DARK_GRAY)
+                }
+            }
+        }
+    }
+
+    private fun renderContentSlide(ppt: XMLSlideShow, slide: Slide, W: Double, H: Double) {
+        val s = ppt.createSlide()
+
+        // Slide title bar
+        textBox(s, W * 0.05, H * 0.04, W * 0.90, H * 0.16) { box ->
+            paragraph(box) {
+                setText(slide.title)
+                fontSize = 28.0
+                isBold = true
+                setFontColor(Color(30, 30, 80))
             }
         }
 
-        // Save the presentation
-        FileOutputStream(outputPath).use { out ->
-            ppt.write(out)
-        }
-        ppt.close()
-    }
+        if (slide.blocks.isEmpty()) return
 
-    private fun createTitleSlide(ppt: XMLSlideShow, content: SlideContent) {
-        val slide = ppt.createSlide()
-
-        // Title
-        val titleShape = slide.createTextBox()
-        titleShape.anchor = Rectangle(50, 100, 600, 100)
-        val titleParagraph = titleShape.addNewTextParagraph()
-        titleParagraph.textAlign = TextParagraph.TextAlign.CENTER
-        val titleRun = titleParagraph.addNewTextRun()
-        titleRun.setText(content.title)
-        titleRun.fontSize = 44.0
-        titleRun.isBold = true
-        titleRun.setFontColor(Color.DARK_GRAY)
-
-        // Subtitle if content exists
-        if (content.content.isNotEmpty()) {
-            val subtitleShape = slide.createTextBox()
-            subtitleShape.anchor = Rectangle(50, 250, 600, 50)
-            val subtitleParagraph = subtitleShape.addNewTextParagraph()
-            subtitleParagraph.textAlign = TextParagraph.TextAlign.CENTER
-            val subtitleRun = subtitleParagraph.addNewTextRun()
-            subtitleRun.setText(content.content)
-            subtitleRun.fontSize = 24.0
-            subtitleRun.setFontColor(Color.DARK_GRAY)
-        }
-    }
-
-    private fun createTitleAndContentSlide(ppt: XMLSlideShow, content: SlideContent) {
-        val slide = ppt.createSlide()
-
-        // Title
-        val titleShape = slide.createTextBox()
-        titleShape.anchor = Rectangle(50, 50, 600, 80)
-        val titleParagraph = titleShape.addNewTextParagraph()
-        val titleRun = titleParagraph.addNewTextRun()
-        titleRun.setText(content.title)
-        titleRun.fontSize = 32.0
-        titleRun.isBold = true
-        titleRun.setFontColor(Color.DARK_GRAY)
-
-        // Content
-        val contentShape = slide.createTextBox()
-        contentShape.anchor = Rectangle(50, 150, 600, 350)
-        val contentParagraph = contentShape.addNewTextParagraph()
-        val contentRun = contentParagraph.addNewTextRun()
-        contentRun.setText(content.content)
-        contentRun.fontSize = 18.0
-        contentRun.setFontColor(Color.BLACK)
-    }
-
-    private fun createBulletPointSlide(ppt: XMLSlideShow, content: SlideContent) {
-        val slide = ppt.createSlide()
-
-        // Title
-        val titleShape = slide.createTextBox()
-        titleShape.anchor = Rectangle(50, 50, 600, 80)
-        val titleParagraph = titleShape.addNewTextParagraph()
-        val titleRun = titleParagraph.addNewTextRun()
-        titleRun.setText(content.title)
-        titleRun.fontSize = 32.0
-        titleRun.isBold = true
-        titleRun.setFontColor(Color.DARK_GRAY)
-
-        // Bullet points
-        val bulletShape = slide.createTextBox()
-        bulletShape.anchor = Rectangle(50, 150, 600, 350)
-
-        content.bulletPoints.forEach { point ->
-            val bulletParagraph = bulletShape.addNewTextParagraph()
-            bulletParagraph.setBullet(true)
-            bulletParagraph.bulletCharacter = "•"
-            bulletParagraph.leftMargin = 20.0
-            bulletParagraph.indent = 20.0
-
-            val bulletRun = bulletParagraph.addNewTextRun()
-            bulletRun.setText(point)
-            bulletRun.fontSize = 20.0
-            bulletRun.setFontColor(Color.BLACK)
-        }
-    }
-
-    private fun createContentSlide(ppt: XMLSlideShow, content: SlideContent) {
-        val slide = ppt.createSlide()
-
-        val contentShape = slide.createTextBox()
-        contentShape.anchor = Rectangle(50, 100, 600, 400)
-        val contentParagraph = contentShape.addNewTextParagraph()
-        contentParagraph.textAlign = TextParagraph.TextAlign.LEFT
-        val contentRun = contentParagraph.addNewTextRun()
-        contentRun.setText(content.content)
-        contentRun.fontSize = 24.0
-        contentRun.setFontColor(Color.BLACK)
-    }
-
-    private fun parseSlideContent(jsonString: String): List<SlideContent> {
-        return try {
-            val json = Json { ignoreUnknownKeys = true }
-            json.decodeFromString<List<SlideContent>>(jsonString)
-        } catch (e: Exception) {
-            // Fallback: try to parse as a simple string list
-            try {
-                val lines = jsonString.split("\n").filter { it.isNotBlank() }
-                lines.mapIndexed { index, line ->
-                    if (index == 0) {
-                        SlideContent(line, slideType = SlideType.TITLE_SLIDE)
-                    } else {
-                        SlideContent("Slide ${index}", content = line, slideType = SlideType.TITLE_AND_CONTENT)
+        // Content area — all blocks share one text box so bullets and paragraphs
+        // flow together naturally and stay vertically aligned.
+        textBox(s, W * 0.05, H * 0.22, W * 0.90, H * 0.72) { box ->
+            slide.blocks.forEach { block ->
+                when (block.type) {
+                    BlockType.PARAGRAPH -> paragraph(box) {
+                        setText(block.text)
+                        fontSize = 18.0
+                        setFontColor(Color.BLACK)
+                    }
+                    BlockType.BULLET -> {
+                        val isSubBullet = block.level >= 2
+                        val para = box.addNewTextParagraph()
+                        para.setBullet(true)
+                        para.bulletCharacter = if (isSubBullet) "–" else "•"
+                        para.leftMargin = if (isSubBullet) 55.0 else 28.0
+                        para.indent = -15.0
+                        para.addNewTextRun().apply {
+                            setText(block.text)
+                            fontSize = if (isSubBullet) 16.0 else 18.0
+                            setFontColor(Color.BLACK)
+                        }
                     }
                 }
-            } catch (e2: Exception) {
-                listOf(SlideContent("Error", listOf("Failed to parse slide content: ${e.message}")))
             }
         }
+    }
+
+    // ── Layout helpers ─────────────────────────────────────────────────────────
+
+    private fun textBox(
+        slide: XSLFSlide,
+        x: Double, y: Double, w: Double, h: Double,
+        configure: (XSLFTextBox) -> Unit
+    ) {
+        val box = slide.createTextBox()
+        box.anchor = Rectangle2D.Double(x, y, w, h)
+        configure(box)
+    }
+
+    private fun paragraph(
+        box: XSLFTextBox,
+        align: TextAlign = TextAlign.LEFT,
+        configure: XSLFTextRun.() -> Unit
+    ) {
+        val para = box.addNewTextParagraph()
+        para.textAlign = align
+        para.addNewTextRun().configure()
     }
 }

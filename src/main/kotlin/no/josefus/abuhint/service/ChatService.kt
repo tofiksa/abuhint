@@ -276,8 +276,8 @@ class ChatService(
         }
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
         val acknowledged = ensureAcknowledgement(normalized)
-        val softLimit = 700
-        val hardLimit = 1200
+        val softLimit = 3200
+        val hardLimit = 3900
         val trimmed = if (acknowledged.length > hardLimit) {
             acknowledged.take(hardLimit).trimEnd() + " ..."
         } else {

@@ -27,6 +27,10 @@ P3 (nice-to-have)
   - Feature-flagged (`WEB_SEARCH_ENABLED`) and provider-configurable; require API key via env.
   - Graceful user messaging for timeouts/5xx/429 and empty results.
   - Log tool invocations (provider/query/tookMs) for observability.
+- [ ] Add PowerPoint-to-email attachment flow:
+  - Extend `EmailService.sendEmail` to accept attachments (filename, contentType, base64 or file path).
+  - Add a combined tool to generate PPTX and email it in one confirmed action.
+  - Validate file exists and is non-empty before sending; return clear error on failure.
 
 Concrete implementation steps
 - [x] Change `loadRecentMessagesFromPinecone` to use `EmbeddingSearchRequest` and share the search helper used in main retrieval.

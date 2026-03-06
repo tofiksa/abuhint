@@ -16,7 +16,7 @@ import java.nio.file.Paths
 class EmailService (
                      @Value("\${resend.api-key}") private val apiKey: String,
                      @Value("\${resend.from}") private val from: String,
-                     @Value("\${resend.subject}") private val subject: String = "Abuhint Notification"){
+                     @Value("\${resend.subject}") private val subject: String = "AbuHintsPresentation"){
 
     private val logger: Logger = LoggerFactory.getLogger(EmailService::class.java)
     private val resend = Resend(apiKey)

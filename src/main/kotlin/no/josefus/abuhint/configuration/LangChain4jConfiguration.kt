@@ -11,6 +11,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore
 import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.tools.EmailService
+import no.josefus.abuhint.service.S3FileLinkService
 import no.josefus.abuhint.tools.PowerPointGeneratorTool
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -84,8 +85,8 @@ public class LangChain4jConfiguration {
     }
 
     @Bean
-    fun powerPointTool(): PowerPointGeneratorTool {
-        return PowerPointGeneratorTool()
+    fun powerPointTool(s3FileLinkService: S3FileLinkService): PowerPointGeneratorTool {
+        return PowerPointGeneratorTool(s3FileLinkService)
     }
 
     @Bean(name = ["openAiTokenizer"])
