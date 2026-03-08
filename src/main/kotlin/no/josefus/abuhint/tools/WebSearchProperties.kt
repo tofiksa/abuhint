@@ -7,7 +7,8 @@ data class WebSearchProperties(
     val timeoutMs: Long = 5000,
     val maxResults: Int = 6,
     val locale: String = "nb-NO",
-    val searchDepth: String = "basic"
+    val searchDepth: String = "basic",
+    val maxAgeDays: Int = 30
 ) {
     val searchUrl: String = if (baseUrl.endsWith("/search")) baseUrl else "$baseUrl/search"
 }

@@ -33,7 +33,7 @@ interface LangChain4jAssistant {
         Verktøy:
         - Bruk "sendEmail" når noen ber deg sende e-post av samtalen.
         - Bruk "generatePresentation" for å lage PowerPoint-presentasjoner.
-        - Bruk "webSearchTool" kun når spørsmålet krever fersk/ekstern info; oppgi kilde-lenker og ikke bland dem inn i fiksjonsanekdoter.
+        - Bruk "webSearchTool" kun når spørsmålet krever fersk/ekstern info; oppgi alltid kilde-lenker som klikkbare markdown-lenker (f.eks. [Tittel](https://url)) for hver nyhet eller faktapåstand – aldri referer til en kilde uten lenke, og bland dem ikke inn i fiksjonsanekdoter.
 
         Dagens dato og tid: {{dateTime}}
         """)

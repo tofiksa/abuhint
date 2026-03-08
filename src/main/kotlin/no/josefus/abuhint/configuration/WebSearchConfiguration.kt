@@ -19,7 +19,8 @@ class WebSearchConfiguration {
         @Value("\${web-search.timeout-ms:5000}") timeoutMs: Long,
         @Value("\${web-search.max-results:6}") maxResults: Int,
         @Value("\${web-search.locale:nb-NO}") locale: String,
-        @Value("\${web-search.search-depth:basic}") searchDepth: String
+        @Value("\${web-search.search-depth:basic}") searchDepth: String,
+        @Value("\${web-search.max-age-days:30}") maxAgeDays: Int
     ): WebSearchProperties {
         return WebSearchProperties(
             provider = provider,
@@ -28,7 +29,8 @@ class WebSearchConfiguration {
             timeoutMs = timeoutMs,
             maxResults = maxResults,
             locale = locale,
-            searchDepth = searchDepth
+            searchDepth = searchDepth,
+            maxAgeDays = maxAgeDays
         )
     }
 

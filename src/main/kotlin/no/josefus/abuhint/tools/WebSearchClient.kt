@@ -75,7 +75,8 @@ class WebSearchClient(
             search_depth = properties.searchDepth,
             language = locale ?: properties.locale,
             include_answer = false,
-            include_images = false
+            include_images = false,
+            max_age_days = properties.maxAgeDays
         )
 
         val headers = HttpHeaders()
@@ -154,7 +155,8 @@ private data class TavilyRequest(
     val include_images: Boolean = false,
     val include_domains: List<String>? = null,
     val exclude_domains: List<String>? = null,
-    val language: String? = null
+    val language: String? = null,
+    val max_age_days: Int? = null
 )
 
 private data class TavilyResult(

@@ -45,7 +45,8 @@ class WebSearchTool(
         val builder = StringBuilder()
         builder.append("Fant ${top.size} treff (via ${response.provider}, ${response.tookMs}ms):\n")
         top.forEachIndexed { idx, r ->
-            builder.append("${idx + 1}. ${r.title} — ${r.url}\n")
+            val siteName = extractSiteName(r.url)
+            builder.append("${idx + 1}. ${r.title} — [kilde:$siteName](${r.url})\n")
             if (r.snippet.isNotBlank()) {
                 builder.append("   ${r.snippet.take(280)}\n")
             }
@@ -53,5 +54,17 @@ class WebSearchTool(
         }
         log.info("webSearchTool results: \n{}", builder.toString())
         return builder.toString().trimEnd()
+    }
+
+    private fun extractSiteName(url: String): String {
+        val host = runCatching {
+            java.net.URI(url).host ?: url
+        }.getOrDefault(url)
+        return host
+            .removePrefix("www.")
+            .split(".")
+            .dropLast(1)
+            .joinToString(".")
+            .takeIf { it.isNotBlank() } ?: host
     }
 }

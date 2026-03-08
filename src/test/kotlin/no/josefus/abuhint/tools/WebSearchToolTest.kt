@@ -33,7 +33,7 @@ class WebSearchToolTest {
         val output = tool.searchWeb("hei", maxResults = 2, locale = "nb-NO")
 
         assertTrue(output.contains("Fant 1 treff"))
-        assertTrue(output.contains("https://example.com"))
+        assertTrue(output.contains("[kilde:example](https://example.com)"))
         verify(client, times(1)).search("hei", 2, "nb-NO")
     }
 
@@ -42,6 +42,33 @@ class WebSearchToolTest {
         val tool = WebSearchTool(client, enabled = false)
         val output = tool.searchWeb("hei", maxResults = 1, locale = "nb-NO")
         assertTrue(output.contains("Web-søk er skrudd av"))
+    }
+
+    @Test
+    fun `searchWeb formats source link with correct site name`() {
+        fun makeResponse(url: String) = WebSearchResponse(
+            results = listOf(WebSearchResult(title = "T", url = url, snippet = "s")),
+            provider = "tavily", tookMs = 1, cacheHit = false, error = null
+        )
+        val tool = WebSearchTool(client, enabled = true)
+
+        `when`(client.search("q", 1, null)).thenReturn(makeResponse("https://www.bbc.co.uk/news/article"))
+        val bbcOutput = tool.searchWeb("q", maxResults = 1)
+        assertTrue(
+            bbcOutput.contains("[kilde:bbc.co](https://www.bbc.co.uk/news/article)") ||
+            bbcOutput.contains("[kilde:bbc](https://www.bbc.co.uk/news/article)"),
+            "Expected kilde:bbc in output but got: $bbcOutput"
+        )
+
+        `when`(client.search("q", 1, null)).thenReturn(makeResponse("https://www.vg.no/artikkel"))
+        val vgOutput = tool.searchWeb("q", maxResults = 1)
+        assertTrue(vgOutput.contains("[kilde:vg](https://www.vg.no/artikkel)"),
+            "Expected kilde:vg in output but got: $vgOutput")
+
+        `when`(client.search("q", 1, null)).thenReturn(makeResponse("https://nrk.no/nyheter"))
+        val nrkOutput = tool.searchWeb("q", maxResults = 1)
+        assertTrue(nrkOutput.contains("[kilde:nrk](https://nrk.no/nyheter)"),
+            "Expected kilde:nrk in output but got: $nrkOutput")
     }
 }
 

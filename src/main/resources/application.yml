@@ -49,6 +49,7 @@ web-search:
   max-results: ${WEB_SEARCH_MAX_RESULTS:6}
   locale: ${WEB_SEARCH_LOCALE:nb-NO}
   search-depth: ${WEB_SEARCH_SEARCH_DEPTH:basic}
+  max-age-days: ${WEB_SEARCH_MAX_AGE_DAYS:30}
 logging:
   level:
     dev:
