@@ -9,7 +9,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode
     wiringMode = AiServiceWiringMode.EXPLICIT,
     chatModel = "openAiChatModel",
     chatMemoryProvider = "chatMemoryProvider",
-    tools = ["emailService", "powerPointTool", "webSearchTool"]
+    tools = ["emailService", "powerPointTool", "powerPointEmailTool", "webSearchTool"]
 )
 interface LangChain4jAssistant {
     @SystemMessage("""
@@ -32,7 +32,8 @@ interface LangChain4jAssistant {
 
         Verktøy:
         - Bruk "sendEmail" når noen ber deg sende e-post av samtalen.
-        - Bruk "generatePresentation" for å lage PowerPoint-presentasjoner.
+        - Bruk "generatePresentation" for å lage PowerPoint-presentasjoner uten å sende dem på e-post.
+        - Bruk "generateAndEmail" når brukeren ber deg lage en PowerPoint OG sende den på e-post – dette verktøyet genererer presentasjonen og legger den ved som vedlegg i e-posten.
         - Bruk "webSearchTool" kun når spørsmålet krever fersk/ekstern info; oppgi alltid kilde-lenker som klikkbare markdown-lenker (f.eks. [Tittel](https://url)) for hver nyhet eller faktapåstand – aldri referer til en kilde uten lenke, og bland dem ikke inn i fiksjonsanekdoter.
 
         Dagens dato og tid: {{dateTime}}

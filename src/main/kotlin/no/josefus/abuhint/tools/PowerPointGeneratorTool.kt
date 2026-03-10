@@ -75,6 +75,21 @@ class PowerPointGeneratorTool(
         }
     }
 
+    /**
+     * Builds the PPTX to a temp file and returns the path.
+     * The CALLER is responsible for deleting the file after use.
+     */
+    internal fun buildToTempFile(presentationTitle: String, slides: List<Slide>): java.nio.file.Path {
+        val tempPath = Files.createTempFile("abuhint-pptx-", ".pptx")
+        buildPresentation(slides, tempPath.toString())
+        return tempPath
+    }
+
+    internal fun uploadAndPresign(tempPath: java.nio.file.Path, presentationTitle: String): String? {
+        val fileName = presentationTitle.replace(Regex("[^A-Za-z0-9_-]"), "_").lowercase() + ".pptx"
+        return s3FileLinkService.uploadAndPresign(tempPath, fileName, pptxContentType)
+    }
+
     private fun buildPresentation(slides: List<Slide>, outputPath: String) {
         XMLSlideShow().use { ppt ->
             val W = ppt.pageSize.width.toDouble()

@@ -12,7 +12,9 @@ import dev.langchain4j.store.embedding.pinecone.PineconeEmbeddingStore
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.tools.EmailService
 import no.josefus.abuhint.service.S3FileLinkService
+import no.josefus.abuhint.tools.PowerPointEmailTool
 import no.josefus.abuhint.tools.PowerPointGeneratorTool
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -87,6 +89,15 @@ public class LangChain4jConfiguration {
     @Bean
     fun powerPointTool(s3FileLinkService: S3FileLinkService): PowerPointGeneratorTool {
         return PowerPointGeneratorTool(s3FileLinkService)
+    }
+
+    @Bean
+    fun powerPointEmailTool(
+        emailService: EmailService,
+        powerPointGeneratorTool: PowerPointGeneratorTool,
+        @Value("\${resend.pptx-email-template:}") pptxEmailTemplate: String
+    ): PowerPointEmailTool {
+        return PowerPointEmailTool(emailService, powerPointGeneratorTool, pptxEmailTemplate)
     }
 
     @Bean(name = ["openAiTokenizer"])

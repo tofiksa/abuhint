@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.Base64
 
 @Component
 class EmailService (
@@ -62,10 +63,12 @@ class EmailService (
         }
         val attachment = when {
             !attachmentPath.isNullOrBlank() -> {
+                val path = Paths.get(attachmentPath)
                 val resolvedFileName = attachmentFileName?.takeIf { it.isNotBlank() }
-                    ?: Paths.get(attachmentPath).fileName.toString()
+                    ?: path.fileName.toString()
+                val base64Content = Base64.getEncoder().encodeToString(Files.readAllBytes(path))
                 Attachment.builder()
-                    .path(attachmentPath)
+                    .content(base64Content)
                     .fileName(resolvedFileName)
                     .build()
             }
