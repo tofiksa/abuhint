@@ -1,5 +1,6 @@
 package no.josefus.abuhint.tools
 
+import com.fasterxml.jackson.annotation.JsonCreator
 import dev.langchain4j.agent.tool.P
 import dev.langchain4j.agent.tool.Tool
 import no.josefus.abuhint.service.S3FileLinkService
@@ -13,7 +14,19 @@ import java.awt.geom.Rectangle2D
 import java.io.FileOutputStream
 import java.nio.file.Files
 
-enum class BlockType { PARAGRAPH, BULLET }
+enum class BlockType {
+    PARAGRAPH, BULLET;
+
+    companion object {
+        @JvmStatic
+        @JsonCreator
+        fun fromString(value: String): BlockType {
+            val upper = value.trim().uppercase()
+            return entries.firstOrNull { it.name.startsWith(upper) || upper.startsWith(it.name) }
+                ?: BULLET
+        }
+    }
+}
 
 data class ContentBlock(
     val text: String,
