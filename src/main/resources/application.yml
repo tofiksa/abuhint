@@ -1,5 +1,13 @@
 server:
   port: 8080
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
 github:
   repository-url: ${GITHUB_REPO_URL}
   repo-token: ${GITHUB_JOSEFUS_TOKEN}

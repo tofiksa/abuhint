@@ -27,7 +27,7 @@ class EmailService (
      *
      * @param html The HTML content of the email.
      */
-    @Tool(name = "sendEmail")
+    @Tool(name = "sendEmail", value = ["Send en e-post med valgfri vedlegg via Resend API"])
     fun sendEmail(
         html: String,
         to: String,

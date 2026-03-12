@@ -11,7 +11,7 @@ class GitHubService(
     @Value("\${github.repository-url}") private val repositoryUrl: String
 ) {
 
-    @Tool(name = "createPullRequest")
+    @Tool(name = "createPullRequest", value = ["Opprett en pull request i GitHub-repositoriet"])
     fun createPullRequest(
         title: String,
         description: String = "dette er en pullrequest fra Abu-Hint",
@@ -60,7 +60,7 @@ class GitHubService(
     }
 
     // create a tool for creating a new branch and commit code
-    @Tool(name = "createBranchAndCommit")
+    @Tool(name = "createBranchAndCommit", value = ["Opprett en ny gren og gjør en commit med gitt innhold"])
     fun createBranchAndCommit(
         branchName: String,
         commitMessage: String,
@@ -109,7 +109,7 @@ class GitHubService(
         }
     }
 
-    @Tool(name = "getBranch")
+    @Tool(name = "getBranch", value = ["Hent innholdet i README.md fra en gitt gren"])
     fun getBranch(branchName: String): String {
         try {
             // Log the start of the branch retrieval process
@@ -138,7 +138,7 @@ class GitHubService(
     }
 
     // push to the main branch
-    @Tool(name = "pushToMain", value= ["Push to main branch"])
+    @Tool(name = "pushToMain", value = ["Flett en gren inn i main ved å opprette en pull request"])
     fun pushToMain(branchName: String): String {
         try {
             // Log the start of the push process

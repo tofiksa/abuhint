@@ -12,9 +12,9 @@ class PowerPointEmailTool(
 ) {
 
     @Tool(
-        "Generate a PowerPoint presentation and email it to someone as an attachment. " +
-        "Use this when the user wants to receive or send the presentation by email. " +
-        "The slides format is identical to generatePresentation."
+        "Generer en PowerPoint-presentasjon og send den som vedlegg på e-post. " +
+        "Bruk dette når brukeren ønsker å motta eller sende presentasjonen per e-post. " +
+        "Lysbildeformatet er identisk med generatePresentation."
     )
     fun generateAndEmail(
         @P("Recipient email address") to: String,

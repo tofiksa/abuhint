@@ -47,12 +47,12 @@ class PowerPointGeneratorTool(
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
     @Tool(
-        "Generate a PowerPoint presentation and upload it for download. " +
-        "The FIRST slide is always the cover slide — set its 'subtitle' for a subheading. " +
-        "All other slides have a 'title' and a list of 'blocks'. " +
-        "Each block is either PARAGRAPH (prose text) or BULLET (bullet point). " +
-        "Use level=1 for top-level bullets and level=2 for sub-bullets. " +
-        "Blocks appear in the order given, so paragraphs and bullets can be freely mixed on one slide."
+        "Generer en PowerPoint-presentasjon og last den opp for nedlasting. " +
+        "Det FØRSTE lysbildet er alltid forsiden — sett 'subtitle' for en undertittel. " +
+        "Alle andre lysbilder har en 'title' og en liste med 'blocks'. " +
+        "Hvert blokkelement er enten PARAGRAPH (løpende tekst) eller BULLET (punktliste). " +
+        "Bruk level=1 for toppnivå-punkter og level=2 for underpunkter. " +
+        "Blokker vises i den rekkefølgen de er oppgitt, så avsnitt og punkter kan fritt blandes på ett lysbilde."
     )
     fun generatePresentation(
         @P("Title of the presentation, also used as the filename") presentationTitle: String,
