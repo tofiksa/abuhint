@@ -1,0 +1,16 @@
+target/
+logs/
+.git/
+.github/
+.idea/
+*.iml
+*.class
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.env

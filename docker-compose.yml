@@ -1,0 +1,54 @@
+services:
+  abuhint:
+    build: .
+    image: abuhint:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # ── OpenAI ──────────────────────────────────────────────────────────────
+      EASTER_API_KEY: ${EASTER_API_KEY}
+
+      # ── Google Gemini ────────────────────────────────────────────────────────
+      GEMINIAI_API_KEY: ${GEMINIAI_API_KEY}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GCP_LOCATION: ${GCP_LOCATION}
+
+      # ── Pinecone ─────────────────────────────────────────────────────────────
+      PINECONE_API_KEY: ${PINECONE_API_KEY}
+
+      # ── GitHub ───────────────────────────────────────────────────────────────
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL}
+      GITHUB_JOSEFUS_TOKEN: ${GITHUB_JOSEFUS_TOKEN}
+
+      # ── Web search ───────────────────────────────────────────────────────────
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED:-true}
+      WEB_SEARCH_PROVIDER: ${WEB_SEARCH_PROVIDER:-tavily}
+      WEB_SEARCH_API_KEY: ${WEB_SEARCH_API_KEY:-}
+      WEB_SEARCH_BASE_URL: ${WEB_SEARCH_BASE_URL:-https://api.tavily.com}
+      WEB_SEARCH_TIMEOUT_MS: ${WEB_SEARCH_TIMEOUT_MS:-5000}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS:-6}
+      WEB_SEARCH_LOCALE: ${WEB_SEARCH_LOCALE:-nb-NO}
+      WEB_SEARCH_SEARCH_DEPTH: ${WEB_SEARCH_SEARCH_DEPTH:-basic}
+      WEB_SEARCH_MAX_AGE_DAYS: ${WEB_SEARCH_MAX_AGE_DAYS:-30}
+
+      # ── AWS S3 ───────────────────────────────────────────────────────────────
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      S3_KEY_PREFIX: ${S3_KEY_PREFIX:-pptx/}
+      S3_PRESIGN_TTL_MINUTES: ${S3_PRESIGN_TTL_MINUTES:-60}
+
+      # ── Resend (email) ───────────────────────────────────────────────────────
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+
+    volumes:
+      # Persist application logs outside the container
+      - ./logs:/app/logs
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

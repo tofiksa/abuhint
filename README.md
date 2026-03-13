@@ -76,8 +76,50 @@ WEB_SEARCH_SAFE_MODE=moderate
 ```
 
 ### 3. Run the Application
+
+#### Option A — Maven (local development)
 ```bash
 ./mvnw spring-boot:run
+```
+
+#### Option B — Docker (standalone)
+Build the image and run it, passing your `.env` file:
+```bash
+docker build -t abuhint .
+docker run -p 8080:8080 --env-file .env abuhint
+```
+
+Or set individual variables inline:
+```bash
+docker run -p 8080:8080 \
+  -e EASTER_API_KEY=... \
+  -e PINECONE_API_KEY=... \
+  -e GITHUB_REPO_URL=... \
+  -e GITHUB_JOSEFUS_TOKEN=... \
+  -e RESEND_API_KEY=... \
+  -e RESEND_FROM_EMAIL=... \
+  -e GEMINIAI_API_KEY=... \
+  -e GCP_PROJECT_ID=... \
+  -e GCP_LOCATION=... \
+  abuhint
+```
+
+To also persist logs on the host:
+```bash
+docker run -p 8080:8080 --env-file .env -v "$(pwd)/logs:/app/logs" abuhint
+```
+
+#### Option C — Docker Compose
+Populate your `.env` file with the variables listed above, then:
+```bash
+docker compose up --build
+```
+
+To run in the background:
+```bash
+docker compose up --build -d
+docker compose logs -f   # stream logs
+docker compose down      # stop and remove containers
 ```
 
 ### 4. Access the Application
