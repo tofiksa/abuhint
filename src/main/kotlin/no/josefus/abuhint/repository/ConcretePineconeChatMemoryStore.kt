@@ -7,11 +7,13 @@ import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingMatch
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
+import com.github.benmanes.caffeine.cache.Caffeine
 import no.josefus.abuhint.service.EmbeddingCache
 import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.util.concurrent.TimeUnit
 
 @Component
 class ConcretePineconeChatMemoryStore(
@@ -20,6 +22,12 @@ class ConcretePineconeChatMemoryStore(
 ) : PineconeChatMemoryStore(langChain4jConfiguration, embeddingCache) {
 
     private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
+
+    // Cache pinned summary per session to avoid re-fetching every request
+    private val pinnedSummaryCache = Caffeine.newBuilder()
+        .maximumSize(500)
+        .expireAfterWrite(5, TimeUnit.MINUTES)
+        .build<String, EmbeddingMatch<TextSegment>?>()
 
     companion object {
         internal fun searchWithRequest(
@@ -120,17 +128,20 @@ class ConcretePineconeChatMemoryStore(
                 rawResults = searchWithRequest(embeddingStore, queryEmbedding, maxResults = 20, minScore = 0.0, logger = logger)
             }
 
-            val recentMatches = loadRecentMatches(
-                memoryId = memoryId,
-                embeddingStore = embeddingStore,
-                embeddingModel = embeddingModel,
-                maxRecent = 3
-            )
+            // Extract recent matches from already-fetched rawResults by metadata order (no extra Pinecone call)
+            val recentMatches = rawResults
+                .sortedByDescending { match ->
+                    val meta = match.embedded().metadata()
+                    meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
+                }
+                .take(3)
+
             val semanticResults = orderByScoreThenRecencyAndDedupe(rawResults)
-            val summaryMatch = loadPinnedSummary(
-                embeddingStore = embeddingStore,
-                embeddingModel = embeddingModel
-            )
+
+            // Cache pinned summary per session to avoid repeated Pinecone searches
+            val summaryMatch = pinnedSummaryCache.get(memoryId) {
+                loadPinnedSummary(embeddingStore, embeddingModel)
+            }
             val searchResults = mergePinnedWithResults(summaryMatch, mergeRecentWithSemantic(recentMatches, semanticResults))
             
             if (searchResults.isNotEmpty()) {
@@ -172,29 +183,6 @@ class ConcretePineconeChatMemoryStore(
             e.printStackTrace()
             return emptyList()
         }
-    }
-
-    private fun loadRecentMatches(
-        memoryId: String,
-        embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
-        embeddingModel: dev.langchain4j.model.embedding.EmbeddingModel,
-        maxRecent: Int
-    ): List<EmbeddingMatch<TextSegment>> {
-        val queryText = "conversation chat message user assistant"
-        val queryEmbedding = embeddingCache.getOrCompute(queryText, embeddingModel)
-        val recentMatches = searchWithRequest(
-            embeddingStore = embeddingStore,
-            queryEmbedding = queryEmbedding,
-            maxResults = 50,
-            minScore = 0.0,
-            logger = logger
-        )
-        return recentMatches
-            .sortedByDescending { match ->
-                val meta = match.embedded().metadata()
-                meta.getLong("order") ?: meta.getLong("ts") ?: Long.MIN_VALUE
-            }
-            .take(maxRecent)
     }
 
     private fun mergeRecentWithSemantic(
