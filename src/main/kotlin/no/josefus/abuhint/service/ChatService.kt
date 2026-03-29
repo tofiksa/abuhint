@@ -53,194 +53,75 @@ class ChatService(
     }
 
     fun processChat(chatId: String, userMessage: String): String {
-        val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
-        val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 5000
-        val tokenizer = openAiTokenizer
-        
-        // Require a unique chatId per session to avoid cross-talk
-        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
-            logger.warn("No chatId provided; generated session id $it to isolate conversation.")
-        }
-
-        val retrievalStart = System.nanoTime()
-        val relevantEmbeddingMatches =
-            retrieveRelevantContext(
-                effectiveChatId, userMessage, maxContextTokens, tokenizer
-            )
-        val retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000
-
-        val relevantMessages =
-            concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
-        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
-
-        logger.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
-
-        // Combine context with current message
-        val enhancedMessage =
-            formatMessagesToContext(summarizedMessages)
-
-        logger.info("Enhanced message {}", enhancedMessage)
-
-        // Calculate token count
-        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        val userTokens = tokenizer.estimateTokenCount(userMessage)
-        val totalTokensWithUser = totalTokens + userTokens
         val dateTime = java.time.LocalDateTime.now().toString()
-        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
-        // Better context trimming
-        if (totalTokensWithUser > maxContextTokens) {
-            // Instead of just taking characters, prioritize keeping complete messages
-            // Split into message units
-            val messages = relevantMessages.toList()
-            val trimmedMessages = mutableListOf<ChatMessage>()
-            var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
-
-
-            for (message in messages) {
-                val messageText = getMessageText(message)
-                val messageTokens = tokenizer.estimateTokenCount(messageText)
-                if (currentTokenCount + messageTokens <= maxContextTokens) {
-                    trimmedMessages.add(message)
-                    currentTokenCount += messageTokens
-                } else {
-                    break
-                }
-            }
-
-            // Rebuild context with only the messages that fit
-            val trimmedContext = formatMessagesToContext(trimmedMessages)
-            val modelStart = System.nanoTime()
-
-            val response = retryLlmCall { assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime) }
-            val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-            logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint, trimmed path)", modelMs)
-            val postModelStart = System.nanoTime()
-            val postProcessed = postProcessReply(response)
-            logTelemetry(
-                model = "openai",
-                contextMessages = trimmedMessages.size,
-                contextTokens = tokenizer.estimateTokenCount(trimmedContext),
-                response = postProcessed,
-                retrievalMatches = relevantMessages.size
-            )
-            val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
-            logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint, trimmed path)", postModelMs)
-            return postProcessed
+        return processChatInternal(chatId, userMessage, openAiTokenizer, "openai") { effectiveChatId, message, uuid ->
+            retryLlmCall { assistant.chat(effectiveChatId, message, uuid, dateTime) }
         }
-        val modelStart = System.nanoTime()
-        log.info("meldingen som sendes til langchain4jAssistant: chatId={} userMessage=\"{}\" uuid={} dateTime={}",
-            chatId,
-            userMessage.take(100),
-            uuid,
-            dateTime
-        )
-        val response = retryLlmCall { assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime) }
-        val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-        logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint)", modelMs)
-        val postModelStart = System.nanoTime()
-        val postProcessed = postProcessReply(response)
-        logTelemetry(
-            model = "openai",
-            contextMessages = summarizedMessages.size,
-            contextTokens = tokenizer.estimateTokenCount(enhancedMessage),
-            response = postProcessed,
-            retrievalMatches = relevantMessages.size
-        )
-        val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
-        logger.info("LatMeasure: postProcessMs={} (OpenAI/Abu-hint)", postModelMs)
-        return postProcessed
-
     }
 
     fun processGeminiChat(chatId: String, userMessage: String): String {
-        val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
+        val dateTime = java.time.LocalDateTime.now().toString()
+        return processChatInternal(chatId, userMessage, geminiTokenizer, "gemini") { effectiveChatId, message, uuid ->
+            retryLlmCall { geminiAssistant.chat(effectiveChatId, message, uuid, dateTime) }
+        }
+    }
+
+    private fun processChatInternal(
+        chatId: String,
+        userMessage: String,
+        tokenizer: Tokenizer,
+        modelLabel: String,
+        chatFn: (String, String, String) -> String
+    ): String {
         val uuid = UUID.randomUUID().toString()
         val maxContextTokens = 5000
-        val tokenizer = geminiTokenizer
-        
+
         val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
-            logger.warn("No chatId provided; generated session id $it to isolate conversation.")
+            log.warn("No chatId provided; generated session id $it to isolate conversation.")
         }
 
         val retrievalStart = System.nanoTime()
-        val relevantEmbeddingMatches =
-            retrieveRelevantContext(
-                effectiveChatId, userMessage, maxContextTokens, tokenizer
-            )
+        val relevantEmbeddingMatches = retrieveRelevantContext(effectiveChatId, userMessage, maxContextTokens, tokenizer)
         val retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000
 
-        val relevantMessages =
-            concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val relevantMessages = concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
         val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
+        log.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
 
-        logger.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
+        val enhancedMessage = formatMessagesToContext(summarizedMessages)
+        val totalTokensWithUser = tokenizer.estimateTokenCount(enhancedMessage) + tokenizer.estimateTokenCount(userMessage)
+        log.info("Total tokens in message (context + user): $totalTokensWithUser")
 
-        // Combine context with current message
-        val enhancedMessage =
-            formatMessagesToContext(summarizedMessages)
+        val contextMessages: Int
+        val contextTokens: Int
+        val finalMessage: String
 
-        // Calculate token count
-        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        val userTokens = tokenizer.estimateTokenCount(userMessage)
-        val totalTokensWithUser = totalTokens + userTokens
-        val dateTime = java.time.LocalDateTime.now().toString()
-        logger.info("Total tokens in message (context + user): $totalTokensWithUser")
-        // Better context trimming
         if (totalTokensWithUser > maxContextTokens) {
-            // Instead of just taking characters, prioritize keeping complete messages
-            // Split into message units
-            val messages = relevantMessages.toList()
-            val trimmedMessages = mutableListOf<ChatMessage>()
-            var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
-
-            for (message in messages) {
-                val messageText = getMessageText(message)
-                val messageTokens = tokenizer.estimateTokenCount(messageText)
-                if (currentTokenCount + messageTokens <= maxContextTokens) {
-                    trimmedMessages.add(message)
-                    currentTokenCount += messageTokens
-                } else {
-                    break
-                }
-            }
-
-            // Rebuild context with only the messages that fit
+            val trimmedMessages = trimToTokenLimit(relevantMessages, userMessage, maxContextTokens, tokenizer)
             val trimmedContext = formatMessagesToContext(trimmedMessages)
-            val modelStart = System.nanoTime()
-            val response = retryLlmCall { geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime) }
-            val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-            logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant, trimmed path)", modelMs)
-            val postModelStart = System.nanoTime()
-            val postProcessed = postProcessReply(response)
-            logTelemetry(
-                model = "gemini",
-                contextMessages = trimmedMessages.size,
-                contextTokens = tokenizer.estimateTokenCount(trimmedContext),
-                response = postProcessed,
-                retrievalMatches = relevantMessages.size
-            )
-            val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
-            logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant, trimmed path)", postModelMs)
-            return postProcessed
+            finalMessage = "$trimmedContext\nUser: $userMessage"
+            contextMessages = trimmedMessages.size
+            contextTokens = tokenizer.estimateTokenCount(trimmedContext)
+        } else {
+            finalMessage = "$enhancedMessage\nUser: $userMessage"
+            contextMessages = summarizedMessages.size
+            contextTokens = tokenizer.estimateTokenCount(enhancedMessage)
         }
+
         val modelStart = System.nanoTime()
-        val response = retryLlmCall { geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime) }
+        val response = chatFn(effectiveChatId, finalMessage, uuid)
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-        logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant)", modelMs)
-        val postModelStart = System.nanoTime()
+        log.info("LatMeasure: modelMs={} ({})", modelMs, modelLabel)
+
         val postProcessed = postProcessReply(response)
         logTelemetry(
-            model = "gemini",
-            contextMessages = summarizedMessages.size,
-            contextTokens = tokenizer.estimateTokenCount(enhancedMessage),
+            model = modelLabel,
+            contextMessages = contextMessages,
+            contextTokens = contextTokens,
             response = postProcessed,
             retrievalMatches = relevantMessages.size
         )
-        val postModelMs = (System.nanoTime() - postModelStart) / 1_000_000
-        logger.info("LatMeasure: postProcessMs={} (Gemini/Abdikverrulant)", postModelMs)
         return postProcessed
-
     }
 
 
