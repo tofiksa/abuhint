@@ -8,11 +8,13 @@ import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.memory.chat.ChatMemoryStore
+import com.github.benmanes.caffeine.cache.Caffeine
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import no.josefus.abuhint.service.EmbeddingCache
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 @Component
@@ -22,16 +24,25 @@ abstract class PineconeChatMemoryStore(
 ) : ChatMemoryStore {
     private val logger = LoggerFactory.getLogger(PineconeChatMemoryStore::class.java)
 
-    // Cache for better performance and to reduce API calls
-    private val memoryCache = ConcurrentHashMap<String, MutableList<ChatMessage>>()
-    
-    // Track the last stored message count per memory ID to avoid re-storing messages
-    protected val lastStoredCount = ConcurrentHashMap<String, Int>()
-    
+    // Bounded cache for session messages
+    private val memoryCache = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterAccess(2, TimeUnit.HOURS)
+        .build<String, MutableList<ChatMessage>>()
+
+    // Track the last stored message count per memory ID
+    protected val lastStoredCount = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterAccess(2, TimeUnit.HOURS)
+        .build<String, Int>()
+
     // Message counter for unique IDs
     private val messageCounters = ConcurrentHashMap<String, AtomicLong>()
 
-    private val summaryStoredUpTo = ConcurrentHashMap<String, Int>()
+    private val summaryStoredUpTo = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterAccess(2, TimeUnit.HOURS)
+        .build<String, Int>()
 
     @org.springframework.beans.factory.annotation.Value("\${pinecone.load-recent-on-cache-miss:false}")
     private var loadRecentOnCacheMiss: Boolean = false
@@ -40,7 +51,7 @@ abstract class PineconeChatMemoryStore(
         val id = memoryId.toString()
         
         // Return from cache if available
-        val cachedMessages = memoryCache[id]
+        val cachedMessages = memoryCache.getIfPresent(id)
         if (cachedMessages != null && cachedMessages.isNotEmpty()) {
             return cachedMessages.toMutableList()
         }
@@ -58,7 +69,7 @@ abstract class PineconeChatMemoryStore(
             logger.debug("Cache is empty for ID: $id, attempting to load from Pinecone")
             val recentMessages = loadRecentMessagesFromPinecone(id)
             if (recentMessages.isNotEmpty()) {
-                memoryCache[id] = recentMessages.toMutableList()
+                memoryCache.put(id, recentMessages.toMutableList())
                 logger.info("Loaded ${recentMessages.size} recent messages from Pinecone for ID: $id")
                 return recentMessages.toMutableList()
             } else {
@@ -139,8 +150,8 @@ abstract class PineconeChatMemoryStore(
      * indicating prior messages exist.
      */
     fun hasStoredMessages(memoryId: String): Boolean {
-        if (memoryCache[memoryId]?.isNotEmpty() == true) return true
-        return (lastStoredCount[memoryId] ?: 0) > 0
+        if (memoryCache.getIfPresent(memoryId)?.isNotEmpty() == true) return true
+        return (lastStoredCount.getIfPresent(memoryId) ?: 0) > 0
     }
     
     /**
@@ -189,18 +200,18 @@ abstract class PineconeChatMemoryStore(
             val embeddingModel = langChain4jConfiguration.embeddingModel()
             
             // Get previous message count
-            val previousCount = lastStoredCount[id] ?: 0
+            val previousCount = lastStoredCount.getIfPresent(id) ?: 0
             val currentCount = messages.size
-            
+
             // Update cache
-            memoryCache[id] = messages.toMutableList()
-            
+            memoryCache.put(id, messages.toMutableList())
+
             // Only store NEW messages to Pinecone (incremental storage)
             // Check if we have new messages compared to what's stored
             if (currentCount > previousCount) {
                 val newMessages = messages.subList(previousCount, currentCount)
                 storeMessagesToPinecone(id, newMessages, embeddingStore, embeddingModel, previousCount)
-                lastStoredCount[id] = currentCount
+                lastStoredCount.put(id, currentCount)
 
                 logger.info("Stored ${newMessages.size} new messages to Pinecone for ID: $id (total: $currentCount)")
                 maybeStoreSummary(id, messages, embeddingStore, embeddingModel, currentCount)
@@ -208,7 +219,7 @@ abstract class PineconeChatMemoryStore(
                 // Special case: if we loaded messages from Pinecone but lastStoredCount wasn't set,
                 // we need to check if these messages are already in Pinecone
                 // For now, we'll assume they are and just update the count
-                lastStoredCount[id] = currentCount
+                lastStoredCount.put(id, currentCount)
                 logger.debug("Updated lastStoredCount for ID: $id to $currentCount (messages were loaded from Pinecone)")
                 maybeStoreSummary(id, messages, embeddingStore, embeddingModel, currentCount)
             } else {
@@ -278,7 +289,7 @@ abstract class PineconeChatMemoryStore(
         val summaryThreshold = 50
         val keepRecent = 10
         val summaryStep = 25
-        val lastSummaryAt = summaryStoredUpTo[memoryId] ?: 0
+        val lastSummaryAt = summaryStoredUpTo.getIfPresent(memoryId) ?: 0
 
         if (currentCount < summaryThreshold) return
         if (currentCount - lastSummaryAt < summaryStep) return
@@ -298,7 +309,7 @@ abstract class PineconeChatMemoryStore(
         try {
             val embedding = embeddingCache.getOrCompute(summaryText, embeddingModel)
             embeddingStore.add(embedding, textSegment)
-            summaryStoredUpTo[memoryId] = currentCount
+            summaryStoredUpTo.put(memoryId, currentCount)
             logger.info("Stored summary for ID: $memoryId (through turn ${currentCount - keepRecent})")
         } catch (e: Exception) {
             logger.error("Failed to store summary for ID: $memoryId: ${e.message}", e)
@@ -320,8 +331,8 @@ abstract class PineconeChatMemoryStore(
 
     override fun deleteMessages(memoryId: Any) {
         val id = memoryId.toString()
-        memoryCache.remove(id)
-        lastStoredCount.remove(id)
+        memoryCache.invalidate(id)
+        lastStoredCount.invalidate(id)
         messageCounters.remove(id)
         
         logger.info("Deleted chat memory cache for ID: $id (Pinecone data remains)")

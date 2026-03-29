@@ -134,6 +134,12 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Caffeine cache -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
 		<!-- Rate limiting -->
 		<dependency>
 			<groupId>com.bucket4j</groupId>

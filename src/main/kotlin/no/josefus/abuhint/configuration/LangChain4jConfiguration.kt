@@ -16,10 +16,11 @@ import no.josefus.abuhint.tools.PowerPointEmailTool
 import no.josefus.abuhint.tools.PowerPointGeneratorTool
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
+import com.github.benmanes.caffeine.cache.Caffeine
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 @Configuration
 public class LangChain4jConfiguration {
@@ -29,7 +30,11 @@ public class LangChain4jConfiguration {
 
     @Value("\${langchain4j.open-ai.chat-model.api-key}")
     lateinit var openaiapikey: String
-    private val embeddingStoreCache = ConcurrentHashMap<String, EmbeddingStore<TextSegment>>()
+
+    private val embeddingStoreCache = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterAccess(2, TimeUnit.HOURS)
+        .build<String, EmbeddingStore<TextSegment>>()
 
 
     @Bean
@@ -47,7 +52,7 @@ public class LangChain4jConfiguration {
             logger.warn("Empty chatId provided - generated namespace '$it' to avoid cross-talk.")
         }
 
-        return embeddingStoreCache.computeIfAbsent(effectiveNamespace) {
+        return embeddingStoreCache.get(effectiveNamespace) {
             // Note: createIndex() is removed to avoid missing dependency issue with org.openapitools.db_control.client
             // The index should already exist in Pinecone. If not, create it manually via Pinecone console or API.
             logger.info("Creating Pinecone embedding store for namespace: $effectiveNamespace")
