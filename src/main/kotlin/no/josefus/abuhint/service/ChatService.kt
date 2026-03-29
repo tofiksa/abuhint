@@ -151,28 +151,18 @@ class ChatService(
             return "I encountered an error processing your request. Please try again."
         }
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
-        val acknowledged = ensureAcknowledgement(normalized)
         val softLimit = 3200
         val hardLimit = 3900
-        val trimmed = if (acknowledged.length > hardLimit) {
-            acknowledged.take(hardLimit).trimEnd() + " ..."
+        val trimmed = if (normalized.length > hardLimit) {
+            normalized.take(hardLimit).trimEnd() + " ..."
         } else {
-            acknowledged
+            normalized
         }
         return if (trimmed.length > softLimit) {
             trimmed.take(softLimit).trimEnd() + " ..."
         } else {
             trimmed
         }
-    }
-
-    private fun ensureAcknowledgement(text: String): String {
-        val trimmed = text.trimStart()
-        val firstSentence = trimmed.substringBefore("\n").substringBefore(".")
-        val alreadyAcknowledged = Regex("^(got it|ok|okay|sure|understood|thanks)", RegexOption.IGNORE_CASE)
-            .containsMatchIn(firstSentence)
-        if (alreadyAcknowledged) return text
-        return "Got it. $trimmed"
     }
 
     private fun logTelemetry(
