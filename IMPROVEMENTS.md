@@ -8,7 +8,7 @@
 ## Priority 1 — Streaming & Response Time
 
 ### 1.1 Implement SSE Streaming for Chat Responses
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `7de44d5`
 - **Impact**: Critical — users currently wait 6-30s staring at a typing indicator
 - **Problem**: `LangChain4jAssistant.chatStream()` and `TechAdvisorAssistant.chatStream()` returning `TokenStream` are declared but never called. `OpenAiCompatibleServiceImpl.createStreamingChatCompletion()` returns a bare `SseEmitter()` with no logic. All 3 chat controllers (`ChatController`, `CoachAssistantController`, `TechAdvisorController`) use synchronous `chat()` calls that block until the full LLM response is ready.
 - **Files**:
@@ -25,7 +25,7 @@
   4. Keep existing synchronous endpoints for backward compatibility
 
 ### 1.2 Use the EmbeddingCache (Already Exists, Never Injected)
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `40026e4`
 - **Impact**: High — saves ~200-500ms per repeated/similar query
 - **Problem**: `EmbeddingCache` is a `@Component` with a `ConcurrentHashMap<String, Embedding>` and a `getOrCompute()` method, but it is never injected or called anywhere. `PineconeChatMemoryStore.storeMessagesToPinecone()` calls `embeddingModel.embed()` directly at line 255.
 - **Files**:
@@ -42,7 +42,7 @@
 ## Priority 2 — Error Handling & Resilience
 
 ### 2.1 Add Global Exception Handler (`@ControllerAdvice`)
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `2491932`
 - **Impact**: High — LLM/Pinecone failures currently become raw 500s with stack traces
 - **Problem**: No `@ControllerAdvice` or `@ExceptionHandler` exists. If OpenAI returns a 429 (rate limit), Pinecone times out, or any tool throws, the client receives an unstructured error with potentially sensitive details.
 - **Files**: No existing file — needs to be created
@@ -53,7 +53,7 @@
   4. Log full stack traces server-side, return sanitized messages to client
 
 ### 2.2 Add Retry Logic on LLM Calls
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `b60ddeb`
 - **Impact**: High — transient 429/503 from OpenAI/Gemini kills the request
 - **Problem**: `ChatService.processChat()` and `processGeminiChat()` have no try-catch around the `assistant.chat()` calls. A single transient API error fails the entire request.
 - **Files**:
@@ -66,7 +66,7 @@
   4. Consider adding `resilience4j` for circuit-breaker pattern on repeated failures
 
 ### 2.3 Add Rate Limiting
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `9b3e1dd`
 - **Impact**: Medium — prevents API credit abuse and protects against DoS
 - **Problem**: All endpoints are completely open. No authentication, no API key checks, no throttling. Anyone can call `/api/chat/send` unlimited times.
 - **Files**: All controller files
@@ -80,7 +80,7 @@
 ## Priority 3 — Memory & Performance
 
 ### 3.1 Add Bounded Cache Eviction
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `5a2e2c9`
 - **Impact**: Medium — prevents memory leak on long-running server
 - **Problem**: All in-memory caches use unbounded `ConcurrentHashMap` with no eviction:
   - `PineconeChatMemoryStore.memoryCache` — full message lists per session
@@ -100,7 +100,7 @@
   4. Add cache hit/miss metrics for observability
 
 ### 3.2 Reduce Pinecone Calls per Request
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `0706809`
 - **Impact**: Medium — each request triggers 3+ Pinecone round-trips
 - **Problem**: `ConcretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit()` makes:
   1. Semantic search (embed query + search)
@@ -120,7 +120,7 @@
 ## Priority 4 — Code Quality & Maintainability
 
 ### 4.1 Deduplicate `processChat()` / `processGeminiChat()`
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `c7cabcf`
 - **Impact**: Medium — reduces ~180 lines to ~100
 - **Problem**: `ChatService.processChat()` (line 29-128) and `processGeminiChat()` (line 130-218) are nearly identical (~90 lines each). The only differences are: `assistant` vs `geminiAssistant`, `openAiTokenizer` vs `geminiTokenizer`, and `"openai"` vs `"gemini"` in telemetry labels.
 - **Files**: `service/ChatService.kt:29-218`
@@ -136,7 +136,7 @@
   ```
 
 ### 4.2 Deduplicate `getMessageText()` (DRY Violation)
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `2602eb6`
 - **Impact**: Low — code hygiene
 - **Problem**: The exact same reflection-based method for extracting text from `ChatMessage` exists in both `ChatService` (line 221-252) and `PineconeChatMemoryStore` (line 331-362). Both use the same fallback chain: `singleText()` -> `text()` -> `toString()` parsing.
 - **Files**:
@@ -148,7 +148,7 @@
   3. Consider using LangChain4j's built-in `text()` method directly (available in recent versions) instead of reflection
 
 ### 4.3 Remove Dead Code
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `d65e2d0`
 - **Impact**: Low — code hygiene
 - **Problem**: Several pieces of dead/unused code:
   - `ChatController.kt:84` — `scoreService.fetchAndReturnGameId(credentials)` returns a `Mono<String>` that is never subscribed to or awaited. The result is stored in `gameId` but never used.
@@ -160,7 +160,7 @@
 - **Solution**: Remove all dead code and unused configuration.
 
 ### 4.4 Improve `ensureAcknowledgement()` Behavior
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `fde7dea`
 - **Impact**: Medium — directly affects chat naturalness
 - **Problem**: `ChatService.ensureAcknowledgement()` (line 293-300) prepends "Got it. " to every response that doesn't already start with an acknowledgement phrase. This makes the assistant sound repetitive and robotic, especially for responses that don't need an acknowledgement (e.g., questions, greetings, creative content).
 - **Files**: `service/ChatService.kt:293-300`
@@ -169,7 +169,7 @@
   2. Or move this behavior into the system prompt as a soft instruction: "Begin responses with a brief acknowledgement when appropriate"
 
 ### 4.5 Improve `postProcessReply()` Truncation
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `464f3f9`
 - **Impact**: Medium — prevents mid-sentence truncation
 - **Problem**: `postProcessReply()` (line 271-291) applies hard character limits (soft: 3200, hard: 3900) and appends "..." when truncating. This can cut content mid-sentence, mid-word, or mid-code-block.
 - **Files**: `service/ChatService.kt:271-291`
@@ -183,19 +183,19 @@
 ## Priority 5 — Observability & Operations
 
 ### 5.1 Add Health Check Endpoint
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `819ea16`
 - **Impact**: Low — operational hygiene
 - **Problem**: No `/health` or `/actuator/health` endpoint for monitoring.
 - **Solution**: Enable Spring Boot Actuator health endpoint, include checks for Pinecone connectivity and LLM API availability.
 
 ### 5.2 Add Request/Response Logging Middleware
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `c7be473`
 - **Impact**: Low — debugging aid
 - **Problem**: No structured request/response logging. Current logging is scattered and ad-hoc.
 - **Solution**: Add a `OncePerRequestFilter` that logs: request method, path, chatId, response status, and latency.
 
 ### 5.3 Add Conversation History Endpoint
-- **Status**: `[ ]` Not started
+- **Status**: `[x]` Done — `e9f41d9`
 - **Impact**: Medium — enables clients to fetch past messages
 - **Problem**: No endpoint to retrieve message history for a chatId. The only access to history is the automatic context injection during a new message. If the client loses local storage, all history is lost from the user's perspective.
 - **Solution**:
@@ -207,20 +207,20 @@
 
 ## Summary Table
 
-| # | Improvement | Priority | Impact | Effort |
-|---|---|---|---|---|
-| 1.1 | SSE Streaming | P1 | Critical | Large |
-| 1.2 | Use EmbeddingCache | P1 | High | Small |
-| 2.1 | Global Exception Handler | P2 | High | Small |
-| 2.2 | Retry Logic on LLM Calls | P2 | High | Medium |
-| 2.3 | Rate Limiting | P2 | Medium | Medium |
-| 3.1 | Bounded Cache Eviction | P3 | Medium | Medium |
-| 3.2 | Reduce Pinecone Calls | P3 | Medium | Medium |
-| 4.1 | Deduplicate processChat | P4 | Medium | Small |
-| 4.2 | Deduplicate getMessageText | P4 | Low | Small |
-| 4.3 | Remove Dead Code | P4 | Low | Small |
-| 4.4 | Improve ensureAcknowledgement | P4 | Medium | Small |
-| 4.5 | Improve postProcessReply | P4 | Medium | Small |
-| 5.1 | Health Check Endpoint | P5 | Low | Small |
-| 5.2 | Request/Response Logging | P5 | Low | Small |
-| 5.3 | Conversation History Endpoint | P5 | Medium | Medium |
+| # | Improvement | Priority | Impact | Effort | Status | Commit |
+|---|---|---|---|---|---|---|
+| 1.1 | SSE Streaming | P1 | Critical | Large | Done | `7de44d5` |
+| 1.2 | Use EmbeddingCache | P1 | High | Small | Done | `40026e4` |
+| 2.1 | Global Exception Handler | P2 | High | Small | Done | `2491932` |
+| 2.2 | Retry Logic on LLM Calls | P2 | High | Medium | Done | `b60ddeb` |
+| 2.3 | Rate Limiting | P2 | Medium | Medium | Done | `9b3e1dd` |
+| 3.1 | Bounded Cache Eviction | P3 | Medium | Medium | Done | `5a2e2c9` |
+| 3.2 | Reduce Pinecone Calls | P3 | Medium | Medium | Done | `0706809` |
+| 4.1 | Deduplicate processChat | P4 | Medium | Small | Done | `c7cabcf` |
+| 4.2 | Deduplicate getMessageText | P4 | Low | Small | Done | `2602eb6` |
+| 4.3 | Remove Dead Code | P4 | Low | Small | Done | `d65e2d0` |
+| 4.4 | Improve ensureAcknowledgement | P4 | Medium | Small | Done | `fde7dea` |
+| 4.5 | Improve postProcessReply | P4 | Medium | Small | Done | `464f3f9` |
+| 5.1 | Health Check Endpoint | P5 | Low | Small | Done | `819ea16` |
+| 5.2 | Request/Response Logging | P5 | Low | Small | Done | `c7be473` |
+| 5.3 | Conversation History Endpoint | P5 | Medium | Medium | Done | `e9f41d9` |
