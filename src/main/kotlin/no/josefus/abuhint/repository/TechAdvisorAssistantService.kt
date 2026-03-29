@@ -7,6 +7,7 @@ import dev.langchain4j.service.spring.AiServiceWiringMode
 @AiService(
     wiringMode = AiServiceWiringMode.EXPLICIT,
     chatModel = "geminiChatModel",
+    streamingChatModel = "geminiStreamingChatModel",
     chatMemoryProvider = "chatMemoryProvider",
     tools = ["webSearchTool"]
 )
