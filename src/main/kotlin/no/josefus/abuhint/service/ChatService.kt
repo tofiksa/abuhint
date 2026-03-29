@@ -233,6 +233,10 @@ class ChatService(
     }
 
 
+    fun getChatHistory(chatId: String): List<ChatMessage> {
+        return concretePineconeChatMemoryStore.getMessages(chatId)
+    }
+
     fun retrieveRelevantContext(
         memoryId: String,
         query: String,

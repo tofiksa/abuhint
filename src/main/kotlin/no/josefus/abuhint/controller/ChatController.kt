@@ -8,6 +8,11 @@ import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
+import dev.langchain4j.data.message.AiMessage
+import dev.langchain4j.data.message.SystemMessage
+import dev.langchain4j.data.message.UserMessage
+import no.josefus.abuhint.dto.ChatHistoryMessage
+import no.josefus.abuhint.dto.ChatHistoryResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
 import no.josefus.abuhint.service.ChatService
 import org.springframework.http.MediaType
@@ -97,6 +102,36 @@ class ChatController(private val chatService: ChatService) {
     ): SseEmitter {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         return chatService.processChatStream(sessionId, message.message)
+    }
+
+    @Operation(
+        summary = "Hent samtalehistorikk",
+        description = "Henter meldingshistorikk for en gitt samtale-ID med paginering.",
+    )
+    @GetMapping("/{chatId}/history", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getChatHistory(
+        @PathVariable chatId: String,
+        @RequestParam(defaultValue = "50") limit: Int,
+        @RequestParam(defaultValue = "0") offset: Int,
+    ): ResponseEntity<ChatHistoryResponse> {
+        val allMessages = chatService.getChatHistory(chatId)
+        val paged = allMessages.drop(offset).take(limit)
+        val historyMessages = paged.map { message ->
+            val role = when (message) {
+                is UserMessage -> "USER"
+                is AiMessage -> "AI"
+                is SystemMessage -> "SYSTEM"
+                else -> "UNKNOWN"
+            }
+            ChatHistoryMessage(role = role, content = no.josefus.abuhint.service.ChatMessageUtils.getMessageText(message))
+        }
+        return ResponseEntity.ok(ChatHistoryResponse(
+            chatId = chatId,
+            messages = historyMessages,
+            total = allMessages.size,
+            offset = offset,
+            limit = limit,
+        ))
     }
 
     @Schema(description = "Forespørsel med brukerens melding")

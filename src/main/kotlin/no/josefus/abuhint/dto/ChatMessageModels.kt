@@ -16,6 +16,28 @@ data class ChatResponse(
     val uuid: String,
 )
 
+@Schema(description = "En melding i samtalehistorikken")
+data class ChatHistoryMessage(
+    @field:Schema(description = "Meldingstype: USER, AI, eller SYSTEM", example = "USER")
+    val role: String,
+    @field:Schema(description = "Meldingsinnholdet")
+    val content: String,
+)
+
+@Schema(description = "Paginert samtalehistorikk")
+data class ChatHistoryResponse(
+    @field:Schema(description = "Samtale-ID")
+    val chatId: String,
+    @field:Schema(description = "Meldingene i samtalen")
+    val messages: List<ChatHistoryMessage>,
+    @field:Schema(description = "Totalt antall meldinger")
+    val total: Int,
+    @field:Schema(description = "Offset brukt i forespørselen")
+    val offset: Int,
+    @field:Schema(description = "Maks antall meldinger returnert")
+    val limit: Int,
+)
+
 @Schema(description = "Informasjon om et enkelt AI-verktøy")
 data class ToolInfo(
     @field:Schema(description = "Verktøyets unike navn", example = "searchWeb")
