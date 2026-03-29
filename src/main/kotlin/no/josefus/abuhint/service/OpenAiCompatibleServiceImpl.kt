@@ -46,8 +46,13 @@ class OpenAiCompatibleServiceImpl(
     }
 
     override fun createStreamingChatCompletion(request: OpenAiCompatibleChatCompletionRequest): SseEmitter {
-        // Dummy implementation for demonstration
-        return SseEmitter()
+        if (request.messages.isEmpty()) {
+            throw IllegalArgumentException("Messages cannot be empty")
+        }
+        val userMessage = request.messages.lastOrNull { it.role == "user" }?.content?.joinToString("\n") { it.text ?: "" }
+            ?: throw IllegalArgumentException("No user message found in request")
+        val chatId = request.chatId?.takeIf { it.isNotBlank() } ?: "openai-${System.currentTimeMillis()}"
+        return chatService.processChatStream(chatId, userMessage)
     }
 }
 

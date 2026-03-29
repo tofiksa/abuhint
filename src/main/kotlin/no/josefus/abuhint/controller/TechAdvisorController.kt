@@ -15,6 +15,7 @@ import no.josefus.abuhint.service.ChatService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 
 @Tag(name = "Tech Advisor")
@@ -93,5 +94,18 @@ class TechAdvisorController(
             content = contentItems,
         )
         return ResponseEntity.ok(contentItems)
+    }
+
+    @Operation(
+        summary = "Stream melding til teknisk rådgiver (SSE)",
+        description = "Streamer svaret fra Abdikverrulant token for token via Server-Sent Events.",
+    )
+    @PostMapping("/chat/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun chatStream(
+        @RequestParam(required = false) chatId: String?,
+        @RequestBody message: ChatRequest,
+    ): SseEmitter {
+        val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        return chatService.processGeminiChatStream(sessionId, message.message)
     }
 }

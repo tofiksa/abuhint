@@ -15,6 +15,7 @@ import no.josefus.abuhint.service.ScoreService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 
 @Tag(name = "Chat")
@@ -97,6 +98,19 @@ class ChatController(private val chatService: ChatService, private val scoreServ
             content = contentItems,
         )
         return ResponseEntity.ok(contentItems)
+    }
+
+    @Operation(
+        summary = "Stream melding til Abu-hint (SSE)",
+        description = "Streamer svaret fra Abu-hint token for token via Server-Sent Events. Kompatibel med web- og Android-klienter.",
+    )
+    @PostMapping(value = ["/stream"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun streamMessage(
+        @RequestParam(required = false) chatId: String?,
+        @RequestBody message: MessageRequest,
+    ): SseEmitter {
+        val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        return chatService.processChatStream(sessionId, message.message)
     }
 
     @Schema(description = "Forespørsel med brukerens melding")

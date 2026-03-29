@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 
 @Tag(name = "Coach")
@@ -91,5 +92,18 @@ class CoachAssistantController(
             content = contentItems,
         )
         return ResponseEntity.ok(contentItems)
+    }
+
+    @Operation(
+        summary = "Stream melding til Coach-assistenten (SSE)",
+        description = "Streamer svaret fra coach-assistenten token for token via Server-Sent Events.",
+    )
+    @PostMapping("/chat/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun chatStream(
+        @RequestParam(required = false) chatId: String?,
+        @RequestBody message: ChatRequest,
+    ): SseEmitter {
+        val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        return chatService.processChatStream(sessionId, message.message)
     }
 }

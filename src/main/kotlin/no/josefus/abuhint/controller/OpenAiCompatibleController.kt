@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
 @Tag(name = "OpenAI-kompatibel")
 @RestController
@@ -131,5 +132,16 @@ class OpenAiCompatibleController(
     ): ResponseEntity<OpenAiCompatibleChatCompletionResponse> {
         val response = openAiCompatibleService.createChatCompletion(request)
         return ResponseEntity.ok(response)
+    }
+
+    @Operation(
+        summary = "OpenAI-kompatibel streaming (SSE)",
+        description = "Streamer svaret token for token via Server-Sent Events, kompatibelt med OpenAI stream-protokollen.",
+    )
+    @PostMapping("/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun createStreamingChatCompletion(
+        @RequestBody request: OpenAiCompatibleChatCompletionRequest,
+    ): SseEmitter {
+        return openAiCompatibleService.createStreamingChatCompletion(request)
     }
 }

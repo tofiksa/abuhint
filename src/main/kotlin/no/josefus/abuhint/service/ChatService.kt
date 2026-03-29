@@ -5,6 +5,7 @@ import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
+import dev.langchain4j.service.TokenStream
 import dev.langchain4j.store.embedding.EmbeddingMatch
 import no.josefus.abuhint.service.Tokenizer
 import java.util.UUID
@@ -13,6 +14,7 @@ import no.josefus.abuhint.repository.LangChain4jAssistant
 import no.josefus.abuhint.repository.TechAdvisorAssistant
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
 @Service
 class ChatService(
@@ -358,6 +360,100 @@ class ChatService(
         return concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
     }
 
+    fun processChatStream(chatId: String, userMessage: String): SseEmitter {
+        return streamFromAssistant(chatId, userMessage, openAiTokenizer) { effectiveChatId, enhancedMessage, uuid ->
+            val dateTime = java.time.LocalDateTime.now().toString()
+            assistant.chatStream(effectiveChatId, enhancedMessage, uuid)
+        }
+    }
 
+    fun processGeminiChatStream(chatId: String, userMessage: String): SseEmitter {
+        return streamFromAssistant(chatId, userMessage, geminiTokenizer) { effectiveChatId, enhancedMessage, uuid ->
+            val dateTime = java.time.LocalDateTime.now().toString()
+            geminiAssistant.chatStream(effectiveChatId, enhancedMessage, uuid, dateTime)
+        }
+    }
+
+    private fun streamFromAssistant(
+        chatId: String,
+        userMessage: String,
+        tokenizer: Tokenizer,
+        streamFactory: (String, String, String) -> TokenStream
+    ): SseEmitter {
+        val emitter = SseEmitter(120_000L)
+        val uuid = UUID.randomUUID().toString()
+        val maxContextTokens = 5000
+
+        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
+            log.warn("No chatId provided; generated session id $it to isolate conversation.")
+        }
+
+        val relevantEmbeddingMatches = retrieveRelevantContext(effectiveChatId, userMessage, maxContextTokens, tokenizer)
+        val relevantMessages = concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
+        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
+        val enhancedMessage = formatMessagesToContext(summarizedMessages)
+
+        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage) + tokenizer.estimateTokenCount(userMessage)
+        val finalMessage = if (totalTokens > maxContextTokens) {
+            val trimmedMessages = trimToTokenLimit(relevantMessages, userMessage, maxContextTokens, tokenizer)
+            "${formatMessagesToContext(trimmedMessages)}\nUser: $userMessage"
+        } else {
+            "$enhancedMessage\nUser: $userMessage"
+        }
+
+        val tokenStream = streamFactory(effectiveChatId, finalMessage, uuid)
+        val fullResponse = StringBuilder()
+
+        tokenStream
+            .onPartialResponse { token ->
+                try {
+                    fullResponse.append(token)
+                    emitter.send(SseEmitter.event().data(token))
+                } catch (e: Exception) {
+                    log.debug("Client disconnected during streaming: ${e.message}")
+                }
+            }
+            .onCompleteResponse { _ ->
+                try {
+                    emitter.send(SseEmitter.event().data("[DONE]"))
+                    emitter.complete()
+                } catch (e: Exception) {
+                    log.debug("Error completing SSE stream: ${e.message}")
+                }
+            }
+            .onError { error ->
+                log.error("Streaming error: ${error.message}", error)
+                try {
+                    emitter.send(SseEmitter.event().data("{\"error\": \"${error.message}\"}"))
+                    emitter.completeWithError(error)
+                } catch (e: Exception) {
+                    log.debug("Error sending error event: ${e.message}")
+                }
+            }
+            .start()
+
+        emitter.onTimeout { log.warn("SSE stream timed out for chatId=$effectiveChatId") }
+        emitter.onError { log.debug("SSE emitter error for chatId=$effectiveChatId: ${it.message}") }
+
+        return emitter
+    }
+
+    private fun trimToTokenLimit(
+        messages: List<ChatMessage>,
+        userMessage: String,
+        maxTokens: Int,
+        tokenizer: Tokenizer
+    ): List<ChatMessage> {
+        val trimmedMessages = mutableListOf<ChatMessage>()
+        var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
+        for (message in messages) {
+            val messageTokens = tokenizer.estimateTokenCount(getMessageText(message))
+            if (currentTokenCount + messageTokens <= maxTokens) {
+                trimmedMessages.add(message)
+                currentTokenCount += messageTokens
+            } else break
+        }
+        return trimmedMessages
+    }
 
 }
