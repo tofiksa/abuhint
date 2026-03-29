@@ -7,14 +7,17 @@ import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingMatch
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
+import no.josefus.abuhint.service.EmbeddingCache
 import no.josefus.abuhint.service.Tokenizer
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
-class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfiguration) :
-        PineconeChatMemoryStore(langChain4jConfiguration) {
+class ConcretePineconeChatMemoryStore(
+    langChain4jConfiguration: LangChain4jConfiguration,
+    private val embeddingCache: EmbeddingCache
+) : PineconeChatMemoryStore(langChain4jConfiguration, embeddingCache) {
 
     private val logger = LoggerFactory.getLogger(ConcretePineconeChatMemoryStore::class.java)
 
@@ -107,7 +110,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
             )
 
             val embeddingModel = langChain4jConfiguration.embeddingModel()
-            val queryEmbedding = embeddingModel.embed(query).content()
+            val queryEmbedding = embeddingCache.getOrCompute(query, embeddingModel)
 
             var rawResults: List<EmbeddingMatch<TextSegment>> =
                 searchWithRequest(embeddingStore, queryEmbedding, maxResults = 20, minScore = 0.3, logger = logger)
@@ -178,7 +181,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
         maxRecent: Int
     ): List<EmbeddingMatch<TextSegment>> {
         val queryText = "conversation chat message user assistant"
-        val queryEmbedding = embeddingModel.embed(queryText).content()
+        val queryEmbedding = embeddingCache.getOrCompute(queryText, embeddingModel)
         val recentMatches = searchWithRequest(
             embeddingStore = embeddingStore,
             queryEmbedding = queryEmbedding,
@@ -220,7 +223,7 @@ class ConcretePineconeChatMemoryStore(langChain4jConfiguration: LangChain4jConfi
         embeddingStore: dev.langchain4j.store.embedding.EmbeddingStore<TextSegment>,
         embeddingModel: dev.langchain4j.model.embedding.EmbeddingModel
     ): EmbeddingMatch<TextSegment>? {
-        val queryEmbedding = embeddingModel.embed("summary of earlier conversation").content()
+        val queryEmbedding = embeddingCache.getOrCompute("summary of earlier conversation", embeddingModel)
         val matches = searchWithRequest(
             embeddingStore = embeddingStore,
             queryEmbedding = queryEmbedding,

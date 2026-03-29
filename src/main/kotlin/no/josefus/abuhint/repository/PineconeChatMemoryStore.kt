@@ -9,13 +9,17 @@ import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.memory.chat.ChatMemoryStore
 import no.josefus.abuhint.configuration.LangChain4jConfiguration
+import no.josefus.abuhint.service.EmbeddingCache
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 @Component
-abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4jConfiguration) : ChatMemoryStore {
+abstract class PineconeChatMemoryStore(
+    val langChain4jConfiguration: LangChain4jConfiguration,
+    private val embeddingCache: EmbeddingCache
+) : ChatMemoryStore {
     private val logger = LoggerFactory.getLogger(PineconeChatMemoryStore::class.java)
 
     // Cache for better performance and to reduce API calls
@@ -89,7 +93,7 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
             // Since we can't query by namespace directly, we use a query that semantically
             // matches typical conversation patterns
             val queryText = "conversation chat message user assistant"
-            val queryEmbedding = embeddingModel.embed(queryText).content()
+            val queryEmbedding = embeddingCache.getOrCompute(queryText, embeddingModel)
             
             logger.debug("Loading recent messages from Pinecone for memoryId: $memoryId (namespace: ${memoryId.ifEmpty { "startup" }})")
             
@@ -251,9 +255,8 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
                 )
                 val textSegment = TextSegment.from(formattedMessageText, metadata)
                 
-                // Generate embedding for this individual message
-                val embeddingResponse = embeddingModel.embed(textSegment)
-                val embedding = embeddingResponse.content()
+                // Generate embedding using cache for repeated text
+                val embedding = embeddingCache.getOrCompute(formattedMessageText, embeddingModel)
                 
                 // Store in Pinecone - ID is auto-generated, messageId can be stored in metadata if needed
                 embeddingStore.add(embedding, textSegment)
@@ -293,7 +296,7 @@ abstract class PineconeChatMemoryStore(val langChain4jConfiguration: LangChain4j
         )
         val textSegment = TextSegment.from(summaryText, metadata)
         try {
-            val embedding = embeddingModel.embed(textSegment).content()
+            val embedding = embeddingCache.getOrCompute(summaryText, embeddingModel)
             embeddingStore.add(embedding, textSegment)
             summaryStoredUpTo[memoryId] = currentCount
             logger.info("Stored summary for ID: $memoryId (through turn ${currentCount - keepRecent})")
