@@ -28,6 +28,30 @@ class ChatService(
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
+
+    private fun <T> retryLlmCall(maxAttempts: Int = 3, block: () -> T): T {
+        var lastException: Exception? = null
+        for (attempt in 1..maxAttempts) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                lastException = e
+                val isRetryable = e.message?.let { msg ->
+                    msg.contains("429") || msg.contains("503") || msg.contains("rate limit", ignoreCase = true) ||
+                        msg.contains("temporarily unavailable", ignoreCase = true)
+                } ?: false
+                if (!isRetryable || attempt == maxAttempts) {
+                    log.error("LLM call failed after $attempt attempt(s): ${e.message}")
+                    throw e
+                }
+                val backoffMs = (1000L * attempt).coerceAtMost(4000L)
+                log.warn("LLM call failed (attempt $attempt/$maxAttempts), retrying in ${backoffMs}ms: ${e.message}")
+                Thread.sleep(backoffMs)
+            }
+        }
+        throw lastException!!
+    }
+
     fun processChat(chatId: String, userMessage: String): String {
         val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
         val uuid = UUID.randomUUID().toString()
@@ -88,7 +112,7 @@ class ChatService(
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             val modelStart = System.nanoTime()
 
-            val response = assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime)
+            val response = retryLlmCall { assistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime) }
             val modelMs = (System.nanoTime() - modelStart) / 1_000_000
             logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint, trimmed path)", modelMs)
             val postModelStart = System.nanoTime()
@@ -111,7 +135,7 @@ class ChatService(
             uuid,
             dateTime
         )
-        val response = assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime )
+        val response = retryLlmCall { assistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime) }
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         logger.info("LatMeasure: modelMs={} (OpenAI/Abu-hint)", modelMs)
         val postModelStart = System.nanoTime()
@@ -184,7 +208,7 @@ class ChatService(
             // Rebuild context with only the messages that fit
             val trimmedContext = formatMessagesToContext(trimmedMessages)
             val modelStart = System.nanoTime()
-            val response = geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime)
+            val response = retryLlmCall { geminiAssistant.chat(effectiveChatId, "$trimmedContext\nUser: $userMessage", uuid, dateTime) }
             val modelMs = (System.nanoTime() - modelStart) / 1_000_000
             logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant, trimmed path)", modelMs)
             val postModelStart = System.nanoTime()
@@ -201,7 +225,7 @@ class ChatService(
             return postProcessed
         }
         val modelStart = System.nanoTime()
-        val response = geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime)
+        val response = retryLlmCall { geminiAssistant.chat(effectiveChatId, "$enhancedMessage\nUser: $userMessage", uuid, dateTime) }
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         logger.info("LatMeasure: modelMs={} (Gemini/Abdikverrulant)", modelMs)
         val postModelStart = System.nanoTime()
