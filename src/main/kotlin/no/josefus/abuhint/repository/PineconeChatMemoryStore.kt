@@ -338,40 +338,5 @@ abstract class PineconeChatMemoryStore(
         logger.info("Deleted chat memory cache for ID: $id (Pinecone data remains)")
     }
     
-    /**
-     * Helper method to extract text from ChatMessage using reflection.
-     * Same approach as used in ChatService.
-     */
-    private fun getMessageText(message: ChatMessage): String {
-        return when (message) {
-            is UserMessage -> {
-                try {
-                    message.javaClass.getMethod("singleText").invoke(message) as? String
-                        ?: message.javaClass.getMethod("text").invoke(message) as? String
-                        ?: ""
-                } catch (e: Exception) {
-                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
-                }
-            }
-            is AiMessage -> {
-                try {
-                    message.javaClass.getMethod("singleText").invoke(message) as? String
-                        ?: message.javaClass.getMethod("text").invoke(message) as? String
-                        ?: ""
-                } catch (e: Exception) {
-                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
-                }
-            }
-            is SystemMessage -> {
-                try {
-                    message.javaClass.getMethod("singleText").invoke(message) as? String
-                        ?: message.javaClass.getMethod("text").invoke(message) as? String
-                        ?: ""
-                } catch (e: Exception) {
-                    message.toString().substringAfter("text=").substringBefore(",").substringBefore(")") ?: ""
-                }
-            }
-            else -> ""
-        }
-    }
+    private fun getMessageText(message: ChatMessage): String = no.josefus.abuhint.service.ChatMessageUtils.getMessageText(message)
 }
