@@ -146,23 +146,47 @@ class ChatService(
 
     private fun postProcessReply(reply: String): String {
         if (reply.isNullOrBlank()) {
-            val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
-            logger.error("Received null or blank reply from assistant")
+            log.error("Received null or blank reply from assistant")
             return "I encountered an error processing your request. Please try again."
         }
         val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
-        val softLimit = 3200
-        val hardLimit = 3900
-        val trimmed = if (normalized.length > hardLimit) {
-            normalized.take(hardLimit).trimEnd() + " ..."
-        } else {
-            normalized
+        val limit = 3900
+        if (normalized.length <= limit) return normalized
+        return truncateAtBoundary(normalized, limit)
+    }
+
+    private fun truncateAtBoundary(text: String, limit: Int): String {
+        // If inside a code block, find the start of the block and cut before it
+        val lastCodeFence = text.lastIndexOf("```", limit)
+        val codeBlocksBefore = text.substring(0, lastCodeFence.coerceAtLeast(0)).count("```")
+        if (lastCodeFence > 0 && codeBlocksBefore % 2 != 0) {
+            // We're inside an unclosed code block — truncate before it opened
+            val openFence = text.lastIndexOf("```", lastCodeFence - 1)
+            if (openFence > 0) {
+                return text.substring(0, openFence).trimEnd() + "\n\n..."
+            }
         }
-        return if (trimmed.length > softLimit) {
-            trimmed.take(softLimit).trimEnd() + " ..."
+
+        // Find nearest sentence boundary (. ! ? or newline) before the limit
+        val searchRegion = text.substring(0, limit)
+        val sentenceEnd = searchRegion.lastIndexOfAny(charArrayOf('.', '!', '?', '\n'))
+        return if (sentenceEnd > limit / 2) {
+            text.substring(0, sentenceEnd + 1).trimEnd() + "\n\n..."
         } else {
-            trimmed
+            text.take(limit).trimEnd() + " ..."
         }
+    }
+
+    private fun String.count(sub: String): Int {
+        var count = 0
+        var idx = 0
+        while (true) {
+            idx = this.indexOf(sub, idx)
+            if (idx < 0) break
+            count++
+            idx += sub.length
+        }
+        return count
     }
 
     private fun logTelemetry(
