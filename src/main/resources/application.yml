@@ -11,19 +11,6 @@ springdoc:
 github:
   repository-url: ${GITHUB_REPO_URL}
   repo-token: ${GITHUB_JOSEFUS_TOKEN}
-spring:
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: password
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-  h2:
-    console:
-      enabled: true
 # LangChain4j properties
 langchain4j:
   open-ai:

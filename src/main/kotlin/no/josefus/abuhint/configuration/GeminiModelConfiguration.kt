@@ -1,18 +1,13 @@
 package no.josefus.abuhint.configuration
 
-import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.model.chat.ChatModel
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel
-import dev.langchain4j.store.embedding.EmbeddingStore
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import java.util.concurrent.ConcurrentHashMap
 
 @Configuration
 class GeminiModelConfiguration {
-
-    private val embeddingStoreCache = ConcurrentHashMap<String, EmbeddingStore<TextSegment>>()
 
     @Value("\${langchain4j.gemini.api-key}")
     lateinit var geminiaikey: String

@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import no.josefus.abuhint.dto.ChatRequest
-import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
 import no.josefus.abuhint.service.ChatService
 import org.springframework.http.MediaType
@@ -81,18 +80,8 @@ class TechAdvisorController(
         @RequestBody message: ChatRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val message = chatService.processGeminiChat(sessionId, message.message)
-        val contentItems = List(1) {
-            OpenAiCompatibleContentItem(
-                type = "text",
-                text = message,
-            )
-        }
-
-        OpenAiCompatibleChatMessage(
-            role = "assistant",
-            content = contentItems,
-        )
+        val reply = chatService.processGeminiChat(sessionId, message.message)
+        val contentItems = listOf(OpenAiCompatibleContentItem(type = "text", text = reply))
         return ResponseEntity.ok(contentItems)
     }
 

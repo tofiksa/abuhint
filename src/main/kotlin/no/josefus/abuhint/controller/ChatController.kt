@@ -8,10 +8,8 @@ import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
-import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
 import no.josefus.abuhint.service.ChatService
-import no.josefus.abuhint.service.ScoreService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -21,7 +19,7 @@ import java.util.UUID
 @Tag(name = "Chat")
 @RestController
 @RequestMapping("/api/chat")
-class ChatController(private val chatService: ChatService, private val scoreService: ScoreService) {
+class ChatController(private val chatService: ChatService) {
 
     @Operation(
         summary = "Send melding til Abu-hint",
@@ -82,21 +80,9 @@ class ChatController(private val chatService: ChatService, private val scoreServ
         @RequestParam(required = false) credentials: String?,
         @RequestBody message: MessageRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
-        val gameId = scoreService.fetchAndReturnGameId(credentials)
-
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val message = chatService.processChat(sessionId, message.message)
-        val contentItems = List(1) {
-            OpenAiCompatibleContentItem(
-                type = "text",
-                text = message,
-            )
-        }
-
-        OpenAiCompatibleChatMessage(
-            role = "assistant",
-            content = contentItems,
-        )
+        val reply = chatService.processChat(sessionId, message.message)
+        val contentItems = listOf(OpenAiCompatibleContentItem(type = "text", text = reply))
         return ResponseEntity.ok(contentItems)
     }
 
