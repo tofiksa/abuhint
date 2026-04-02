@@ -33,6 +33,9 @@ langchain4j:
       top-p: 1.0
       frequency-penalty: 0.0
       presence-penalty: 0.0
+      custom-parameters:
+        prompt_cache_key: "abuhint-system-v1"
+        prompt_cache_retention: "24h"
     streaming-chat-model:
       api-key: ${EASTER_API_KEY}
       model-name: gpt-4.1-mini
@@ -41,6 +44,9 @@ langchain4j:
       top-p: 1.0
       frequency-penalty: 0.0
       presence-penalty: 0.0
+      custom-parameters:
+        prompt_cache_key: "abuhint-system-v1"
+        prompt_cache_retention: "24h"
   gemini:
     api-key: ${GEMINIAI_API_KEY} # Hent nøkkelen fra en miljøvariabel
     project-id: ${GCP_PROJECT_ID} # Hent Google Cloud Project ID fra miljøvariabel
