@@ -14,7 +14,9 @@ import dev.langchain4j.data.message.UserMessage
 import no.josefus.abuhint.dto.ChatHistoryMessage
 import no.josefus.abuhint.dto.ChatHistoryResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
+import no.josefus.abuhint.dto.TokenUsageResponse
 import no.josefus.abuhint.service.ChatService
+import no.josefus.abuhint.service.TokenUsageStore
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -24,7 +26,10 @@ import java.util.UUID
 @Tag(name = "Chat")
 @RestController
 @RequestMapping("/api/chat")
-class ChatController(private val chatService: ChatService) {
+class ChatController(
+    private val chatService: ChatService,
+    private val tokenUsageStore: TokenUsageStore,
+) {
 
     @Operation(
         summary = "Send melding til Abu-hint",
@@ -133,6 +138,70 @@ class ChatController(private val chatService: ChatService) {
             limit = limit,
         ))
     }
+
+    @Operation(
+        summary = "Hent tokenforbruk for en samtale",
+        description = "Returnerer akkumulert tokenforbruk (input, cached, output) for en gitt samtale-ID.",
+        parameters = [
+            Parameter(
+                name = "chatId",
+                description = "Samtale-ID (UUID) å hente tokenforbruk for",
+                example = "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                required = true,
+            ),
+        ],
+        responses = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Tokenforbruk for samtalen",
+                content = [Content(
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = Schema(implementation = TokenUsageResponse::class),
+                    examples = [ExampleObject(
+                        name = "Eksempel",
+                        value = """{"chatId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","inputTokens":2048,"cachedInputTokens":1024,"outputTokens":512,"totalTokens":2560,"requestCount":3,"modelName":"gpt-4.1-mini"}""",
+                    )],
+                )],
+            ),
+            ApiResponse(responseCode = "404", description = "Ingen tokenforbruk funnet for denne samtale-IDen"),
+        ],
+    )
+    @GetMapping("/usage/{chatId}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getTokenUsage(@PathVariable chatId: String): ResponseEntity<TokenUsageResponse> {
+        val usage = tokenUsageStore.getUsage(chatId)
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok(usage.toResponse())
+    }
+
+    @Operation(
+        summary = "Hent tokenforbruk for alle samtaler",
+        description = "Returnerer akkumulert tokenforbruk for alle aktive samtale-IDer i minnet.",
+        responses = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Liste over tokenforbruk for alle samtaler",
+                content = [Content(
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    array = ArraySchema(schema = Schema(implementation = TokenUsageResponse::class)),
+                )],
+            ),
+        ],
+    )
+    @GetMapping("/usage", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun getAllTokenUsage(): ResponseEntity<List<TokenUsageResponse>> {
+        val all = tokenUsageStore.getAllUsage().values.map { it.toResponse() }
+        return ResponseEntity.ok(all)
+    }
+
+    private fun no.josefus.abuhint.service.TokenUsageRecord.toResponse() = TokenUsageResponse(
+        chatId = chatId,
+        inputTokens = inputTokens.get(),
+        cachedInputTokens = cachedInputTokens.get(),
+        outputTokens = outputTokens.get(),
+        totalTokens = inputTokens.get() + outputTokens.get(),
+        requestCount = requestCount.get(),
+        modelName = lastModelName,
+    )
 
     @Schema(description = "Forespørsel med brukerens melding")
     data class MessageRequest(

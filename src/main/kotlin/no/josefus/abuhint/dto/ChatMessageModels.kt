@@ -38,6 +38,24 @@ data class ChatHistoryResponse(
     val limit: Int,
 )
 
+@Schema(description = "Tokenforbruk for en samtale")
+data class TokenUsageResponse(
+    @field:Schema(description = "Samtale-ID")
+    val chatId: String,
+    @field:Schema(description = "Totalt antall input-tokens sendt til API")
+    val inputTokens: Long,
+    @field:Schema(description = "Antall input-tokens som traff cache (redusert kostnad)")
+    val cachedInputTokens: Long,
+    @field:Schema(description = "Totalt antall output-tokens mottatt fra API")
+    val outputTokens: Long,
+    @field:Schema(description = "Sum av input + output tokens")
+    val totalTokens: Long,
+    @field:Schema(description = "Antall API-kall for denne samtalen")
+    val requestCount: Int,
+    @field:Schema(description = "Siste modell brukt")
+    val modelName: String,
+)
+
 @Schema(description = "Informasjon om et enkelt AI-verktøy")
 data class ToolInfo(
     @field:Schema(description = "Verktøyets unike navn", example = "searchWeb")

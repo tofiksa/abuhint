@@ -109,7 +109,12 @@ class ChatService(
         }
 
         val modelStart = System.nanoTime()
-        val response = chatFn(effectiveChatId, finalMessage, uuid)
+        ChatIdContextHolder.set(effectiveChatId)
+        val response = try {
+            chatFn(effectiveChatId, finalMessage, uuid)
+        } finally {
+            ChatIdContextHolder.clear()
+        }
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         log.info("LatMeasure: modelMs={} ({})", modelMs, modelLabel)
 
@@ -293,7 +298,12 @@ class ChatService(
             "$enhancedMessage\nUser: $userMessage"
         }
 
-        val tokenStream = streamFactory(effectiveChatId, finalMessage, uuid)
+        ChatIdContextHolder.set(effectiveChatId)
+        val tokenStream = try {
+            streamFactory(effectiveChatId, finalMessage, uuid)
+        } finally {
+            ChatIdContextHolder.clear()
+        }
         val fullResponse = StringBuilder()
 
         tokenStream
