@@ -42,7 +42,7 @@ langchain4j:
         prompt_cache_retention: "24h"
     streaming-chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-4.1-mini
+      model-name: gpt-5.4-mini
       temperature: 1
       max_completion_tokens: 1024
       top-p: 1.0
