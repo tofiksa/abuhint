@@ -33,7 +33,7 @@ class CoachAssistantController(
         description = """
             Sender en melding til Abu-hint i rollen som teamleder-coach og returnerer svaret.
 
-            Samme underliggende modell (OpenAI `gpt-4.1-mini`) og verktøysett som Chat-endepunktet,
+            Samme underliggende modell (konfigurert i application.yml) og verktøysett som Chat-endepunktet,
             men med et coach-tilpasset systemsprompt som fokuserer på teamdynamikk, motivasjon og ledelse.
 
             Send med `chatId` for å fortsette en eksisterende samtale.

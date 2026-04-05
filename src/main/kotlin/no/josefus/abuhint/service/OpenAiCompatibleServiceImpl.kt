@@ -5,12 +5,14 @@ import no.josefus.abuhint.dto.OpenAiCompatibleChatCompletionResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
 import no.josefus.abuhint.dto.OpenAiCompatibleChoice
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
 @Service
 class OpenAiCompatibleServiceImpl(
-    private val chatService: ChatService
+    private val chatService: ChatService,
+    @Value("\${langchain4j.open-ai.chat-model.model-name}") private val modelName: String,
 ) : OpenAiCompatibleService {
     override fun createChatCompletion(request: OpenAiCompatibleChatCompletionRequest): OpenAiCompatibleChatCompletionResponse {
         if (request.messages.isEmpty()) {
@@ -39,7 +41,7 @@ class OpenAiCompatibleServiceImpl(
             id = "chatcmpl-${System.currentTimeMillis()}-${(1000..9999).random()}",
             `object` = "chat.completion",
             created = System.currentTimeMillis() / 1000,
-            model = request.model,
+            model = modelName,
             choices = listOf(choice),
             usage = null // You can fill this if you want token usage stats
         )

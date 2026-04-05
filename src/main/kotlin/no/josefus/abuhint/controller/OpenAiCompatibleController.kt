@@ -36,7 +36,7 @@ class OpenAiCompatibleController(
             ### Støttede felt
             | Felt | Støtte | Merknad |
             |------|--------|---------|
-            | `model` | Ignoreres | Alltid `gpt-4.1-mini` internt |
+            | `model` | Ignoreres | Konfigurert i application.yml |
             | `messages` | Ja | Støtter string-innhold og strukturerte content-arrays |
             | `temperature` | Ignoreres | Satt i serverkonfigurasjon |
             | `stream` | Nei | Returnerer alltid komplett svar |
@@ -56,7 +56,7 @@ class OpenAiCompatibleController(
                         name = "Enkel melding",
                         summary = "Minimal forespørsel",
                         value = """{
-  "model": "gpt-4o",
+  "model": "default",
   "messages": [
     {"role": "user", "content": "Forklar forskjellen mellom Kotlin data classes og vanlige klasser."}
   ]
@@ -66,7 +66,7 @@ class OpenAiCompatibleController(
                         name = "Med samtaleminne",
                         summary = "Fortsetter en eksisterende samtale",
                         value = """{
-  "model": "gpt-4o",
+  "model": "default",
   "chat_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
   "messages": [
     {"role": "user", "content": "Hva anbefalte du i stad?"}
@@ -77,7 +77,7 @@ class OpenAiCompatibleController(
                         name = "Strukturert innhold",
                         summary = "Med bilde-URL (multimodalt)",
                         value = """{
-  "model": "gpt-4o",
+  "model": "default",
   "messages": [
     {
       "role": "user",
@@ -105,7 +105,7 @@ class OpenAiCompatibleController(
   "id": "chatcmpl-abc123",
   "object": "chat.completion",
   "created": 1748732400,
-  "model": "gpt-4.1-mini",
+  "model": "configured-in-application-yml",
   "choices": [
     {
       "message": {

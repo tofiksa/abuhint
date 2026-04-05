@@ -37,7 +37,7 @@ class OpenApiConfiguration {
                     REST API for Abuhint – en AI-drevet chatbot-tjeneste med støtte for flere personas og verktøy.
 
                     ## Personas
-                    - **Abu-hint** (`/api/chat`, `/api/coach`) – teamleder-coach drevet av OpenAI `gpt-4.1-mini`. Har tilgang til e-post, PowerPoint, nettsøk og GitHub-verktøy.
+                    - **Abu-hint** (`/api/chat`, `/api/coach`) – teamleder-coach drevet av OpenAI (modell konfigurert i application.yml). Har tilgang til e-post, PowerPoint, nettsøk og GitHub-verktøy.
                     - **Abdikverrulant** (`/api/tech-advisor`) – teknisk rådgiver drevet av Google Gemini 2.5 Flash. Har tilgang til nettsøk.
 
                     ## OpenAI-kompatibelt endepunkt
@@ -61,7 +61,7 @@ class OpenApiConfiguration {
         .addTagsItem(
             Tag()
                 .name("Chat")
-                .description("Direktechat med Abu-hint (OpenAI gpt-4.1-mini). Støtter e-post, PowerPoint, nettsøk og GitHub-verktøy.")
+                .description("Direktechat med Abu-hint (OpenAI, modell konfigurert i application.yml). Støtter e-post, PowerPoint, nettsøk og GitHub-verktøy.")
         )
         .addTagsItem(
             Tag()

@@ -17,10 +17,10 @@ import io.swagger.v3.oas.annotations.media.Schema
 @Schema(description = "Chat completion-forespørsel i OpenAI-kompatibelt format")
 data class OpenAiCompatibleChatCompletionRequest(
     @field:Schema(
-        description = "Modell-identifikator. Ignoreres av serveren – alltid `gpt-4.1-mini` internt.",
-        example = "gpt-4o",
+        description = "Modell-identifikator. Ignoreres av serveren – modellen er konfigurert i application.yml.",
+        example = "default",
     )
-    val model: String = "gpt-4o",
+    val model: String = "default",
 
     @field:Schema(description = "Samtalehistorikk som en liste med meldinger. Minst én melding er påkrevd.")
     val messages: List<OpenAiCompatibleChatMessage>,
@@ -116,7 +116,7 @@ data class OpenAiCompatibleChatCompletionResponse(
     @field:Schema(description = "Unix-tidsstempel for når svaret ble generert", example = "1748732400")
     val created: Long,
 
-    @field:Schema(description = "Modellen som ble brukt", example = "gpt-4.1-mini")
+    @field:Schema(description = "Modellen som ble brukt (konfigurert i application.yml)")
     val model: String,
 
     @field:Schema(description = "Liste med svaralternativer. Inneholder alltid ett element.")

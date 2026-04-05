@@ -27,9 +27,11 @@ github:
 # LangChain4j properties
 langchain4j:
   open-ai:
+    embedding-model:
+      model-name: text-embedding-ada-002
     chat-model:
       api-key: ${EASTER_API_KEY}
-      model-name: gpt-4.1-mini
+      model-name: gpt-5.4-mini
       log-requests: false
       log-responses: false
       temperature: 1

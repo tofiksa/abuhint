@@ -36,7 +36,7 @@ class ChatController(
         description = """
             Sender en melding til Abu-hint og returnerer svaret som en liste med innholdselementer.
 
-            Abu-hint er en AI-drevet teamleder-coach drevet av OpenAI `gpt-4.1-mini` med tilgang til følgende verktøy:
+            Abu-hint er en AI-drevet teamleder-coach drevet av OpenAI (modell konfigurert i application.yml) med tilgang til følgende verktøy:
             - **sendEmail** – sender e-post via Resend API
             - **generatePresentation** – genererer PowerPoint og laster opp til S3
             - **generateAndEmail** – genererer PowerPoint og sender som e-postvedlegg
@@ -159,7 +159,7 @@ class ChatController(
                     schema = Schema(implementation = TokenUsageResponse::class),
                     examples = [ExampleObject(
                         name = "Eksempel",
-                        value = """{"chatId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","inputTokens":2048,"cachedInputTokens":1024,"outputTokens":512,"totalTokens":2560,"requestCount":3,"modelName":"gpt-4.1-mini"}""",
+                        value = """{"chatId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","inputTokens":2048,"cachedInputTokens":1024,"outputTokens":512,"totalTokens":2560,"requestCount":3,"modelName":"configured-in-application-yml"}""",
                     )],
                 )],
             ),

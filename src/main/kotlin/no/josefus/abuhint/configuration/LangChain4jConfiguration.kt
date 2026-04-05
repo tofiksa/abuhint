@@ -31,6 +31,15 @@ public class LangChain4jConfiguration {
     @Value("\${langchain4j.open-ai.chat-model.api-key}")
     lateinit var openaiapikey: String
 
+    @Value("\${langchain4j.open-ai.chat-model.model-name}")
+    lateinit var openAiModelName: String
+
+    @Value("\${langchain4j.open-ai.embedding-model.model-name}")
+    lateinit var embeddingModelName: String
+
+    @Value("\${langchain4j.gemini.model-name}")
+    lateinit var geminiModelName: String
+
     private val embeddingStoreCache = Caffeine.newBuilder()
         .maximumSize(1000)
         .expireAfterAccess(2, TimeUnit.HOURS)
@@ -41,7 +50,7 @@ public class LangChain4jConfiguration {
     fun embeddingModel(): EmbeddingModel {
         return OpenAiEmbeddingModel.builder()
             .apiKey(openaiapikey)
-            .modelName("text-embedding-ada-002")
+            .modelName(embeddingModelName)
             .httpClientBuilder(dev.langchain4j.http.client.spring.restclient.SpringRestClientBuilderFactory().create())
             .build()
     }
@@ -107,11 +116,11 @@ public class LangChain4jConfiguration {
 
     @Bean(name = ["openAiTokenizer"])
     fun openAiTokenizer(): Tokenizer {
-        return ModelAwareTokenizer("gpt-4o")
+        return ModelAwareTokenizer(openAiModelName)
     }
 
     @Bean(name = ["geminiTokenizer"])
     fun geminiTokenizer(): Tokenizer {
-        return ModelAwareTokenizer("gemini-1.5-pro")
+        return ModelAwareTokenizer(geminiModelName)
     }
 }
