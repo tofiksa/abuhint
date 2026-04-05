@@ -1,8 +1,11 @@
 package no.josefus.abuhint.controller
 
+import io.jsonwebtoken.ExpiredJwtException
+import io.jsonwebtoken.security.SignatureException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.AccessDeniedException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.client.HttpClientErrorException
@@ -22,6 +25,27 @@ class GlobalExceptionHandler {
         log.warn("Bad request: {}", ex.message)
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ErrorResponse(error = ex.message ?: "Invalid request", code = "BAD_REQUEST"))
+    }
+
+    @ExceptionHandler(SignatureException::class)
+    fun handleJwtSignature(ex: SignatureException): ResponseEntity<ErrorResponse> {
+        log.warn("JWT signature invalid: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ErrorResponse(error = "Ugyldig token-signatur.", code = "INVALID_TOKEN"))
+    }
+
+    @ExceptionHandler(ExpiredJwtException::class)
+    fun handleJwtExpired(ex: ExpiredJwtException): ResponseEntity<ErrorResponse> {
+        log.warn("JWT expired: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ErrorResponse(error = "Token er utløpt.", code = "TOKEN_EXPIRED"))
+    }
+
+    @ExceptionHandler(AccessDeniedException::class)
+    fun handleAccessDenied(ex: AccessDeniedException): ResponseEntity<ErrorResponse> {
+        log.warn("Access denied: {}", ex.message)
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ErrorResponse(error = "Ingen tilgang.", code = "FORBIDDEN"))
     }
 
     @ExceptionHandler(HttpClientErrorException.TooManyRequests::class)
