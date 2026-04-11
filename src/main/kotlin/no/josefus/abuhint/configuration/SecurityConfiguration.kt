@@ -28,6 +28,8 @@ class SecurityConfiguration(
                 auth
                     // Public: health/info actuator
                     .requestMatchers("/actuator/**").permitAll()
+                    // Public: Spring Boot error page (internal Tomcat dispatch)
+                    .requestMatchers("/error").permitAll()
                     // Public: Swagger / OpenAPI docs
                     .requestMatchers(
                         "/swagger-ui.html",
