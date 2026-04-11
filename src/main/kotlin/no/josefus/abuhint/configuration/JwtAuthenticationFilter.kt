@@ -1,5 +1,6 @@
 package no.josefus.abuhint.configuration
 
+import jakarta.servlet.DispatcherType
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -22,6 +23,12 @@ class JwtAuthenticationFilter(
 ) : OncePerRequestFilter() {
 
     private val log = LoggerFactory.getLogger(JwtAuthenticationFilter::class.java)
+
+    override fun shouldNotFilter(request: HttpServletRequest): Boolean {
+        // Skip JWT processing for async and error dispatches – auth is already set on the original request
+        return request.dispatcherType == DispatcherType.ASYNC ||
+            request.dispatcherType == DispatcherType.ERROR
+    }
 
     override fun doFilterInternal(
         request: HttpServletRequest,
