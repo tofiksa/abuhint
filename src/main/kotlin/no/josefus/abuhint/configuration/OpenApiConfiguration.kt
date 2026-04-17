@@ -39,6 +39,7 @@ class OpenApiConfiguration {
                     ## Personas
                     - **Abu-hint** (`/api/chat`, `/api/coach`) – teamleder-coach drevet av OpenAI (modell konfigurert i application.yml). Har tilgang til e-post, PowerPoint, nettsøk og GitHub-verktøy.
                     - **Abdikverrulant** (`/api/tech-advisor`) – teknisk rådgiver drevet av Google Gemini 2.5 Flash. Har tilgang til nettsøk.
+                    - **Familieplanleggern** (`/api/familie`, `/api/google/oauth/*`) – husholdnings-coach drevet av OpenAI. Kobler mot brukerens Google Calendar (OAuth2) for å lese/opprette hendelser og lage kategori-kalendere. Kall `POST /api/google/oauth/start` for å starte OAuth-flyten og `GET /api/google/oauth/status` for å sjekke tilkoblingsstatus. Alle mutasjoner bruker propose → confirm-tokens for å unngå utilsiktede endringer.
 
                     ## OpenAI-kompatibelt endepunkt
                     `/v1/chat/completions` er kompatibelt med OpenAI Chat Completions API og kan brukes med klienter som LiteLLM, OpenWebUI eller andre OpenAI-kompatible verktøy.
@@ -82,5 +83,15 @@ class OpenApiConfiguration {
             Tag()
                 .name("Verktøy")
                 .description("Oversikt over tilgjengelige AI-verktøy og deres beskrivelser.")
+        )
+        .addTagsItem(
+            Tag()
+                .name("Familieplanleggern")
+                .description("Chat-endepunkter for Familieplanleggern-agenten. Krever at brukeren er tilkoblet Google via /api/google/oauth.")
+        )
+        .addTagsItem(
+            Tag()
+                .name("Familieplanleggern – Google OAuth")
+                .description("OAuth 2.0-flyt for å koble brukerens Google-konto til Familieplanleggern. Deep-link-redirect til Android-appen etter vellykket tilkobling.")
         )
 }
