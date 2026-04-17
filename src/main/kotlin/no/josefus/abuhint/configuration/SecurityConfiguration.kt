@@ -1,5 +1,6 @@
 package no.josefus.abuhint.configuration
 
+import jakarta.servlet.DispatcherType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -26,6 +27,9 @@ class SecurityConfiguration(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    // Permit async & error re-dispatches (SSE/DeferredResult re-enters the filter chain
+                    // after the controller returns; we already authorized on the initial REQUEST dispatch).
+                    .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
                     // Public: health/info actuator
                     .requestMatchers("/actuator/**").permitAll()
                     // Public: Spring Boot error page (internal Tomcat dispatch)
