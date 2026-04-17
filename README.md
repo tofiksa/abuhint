@@ -9,13 +9,10 @@ Welcome to **AbuHint**, a Kotlin-based Spring Boot application that combines the
 
 ## 🚀 Features
 
-### 🤖 AI Assistant
-- **LangChain4j Integration**: Powered by OpenAI's GPT-4.1-mini model.
-- **Capabilities**:
-    - Acts as a world-class team coach and sparring partner.
-    - Helps create plans, provides feedback, and generates ideas.
-    - References books and methods for advice.
-    - Sends emails with your CV upon request (using the `sendEmail` tool).
+### 🤖 AI Assistants (personas)
+- **Abu-hint** – teamleder-coach (OpenAI), tools: e-post, PowerPoint, nettsøk, GitHub.
+- **Abdikverrulant** – techlead-coach (Gemini 2.5 Flash), tools: nettsøk.
+- **Familieplanleggern** – husholdnings-coach (OpenAI) som kobler mot brukerens Google-konto via OAuth2 for å lese/opprette kalenderhendelser og lage kategori-kalendere. Alle endringer går gjennom en propose → confirm-gate slik at brukeren må bekrefte i chat før agenten faktisk skriver til Google.
 
 ### 📧 Email Service
 - **Resend API Integration**:
@@ -73,7 +70,71 @@ WEB_SEARCH_SEARCH_DEPTH=basic
 BRAVE_API_KEY=<your-brave-api-key>
 WEB_SEARCH_CACHE_TTL_S=300
 WEB_SEARCH_SAFE_MODE=moderate
+
+# Familieplanleggern (Google Calendar OAuth + credential store)
+GOOGLE_CLIENT_ID=<google-oauth-client-id>
+GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+GOOGLE_REDIRECT_URI=http://localhost:8080/api/google/oauth/callback
+GOOGLE_TOKEN_ENC_KEY=<base64-32-byte-aes-key>        # openssl rand -base64 32
+FAMILIE_DEFAULT_TIMEZONE=Europe/Oslo
+FAMILIE_DEEP_LINK_SUCCESS_URI=familieplanleggern://oauth/done   # default; override for your Android app scheme
+
+# Persistence (H2 in-mem default; override for Postgres in prod)
+DATASOURCE_URL=jdbc:h2:mem:abuhint;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+DATASOURCE_USERNAME=sa
+DATASOURCE_PASSWORD=
+DATASOURCE_DRIVER=org.h2.Driver                    # org.postgresql.Driver for prod
+JPA_DDL_AUTO=update
 ```
+
+### Google OAuth setup (Familieplanleggern)
+
+1. Gå til [Google Cloud Console](https://console.cloud.google.com/) → opprett / velg et prosjekt.
+2. Aktiver **Google Calendar API** under `APIs & Services → Library`.
+3. Under `APIs & Services → Credentials`, opprett en **OAuth 2.0 Client ID** av type **Web application**.
+4. Legg til autorisert redirect URI: `http://localhost:8080/api/google/oauth/callback` (og/eller prod-URL).
+5. Kopier **Client ID** og **Client secret** inn i miljøvariablene over.
+6. Scopes som brukes: `https://www.googleapis.com/auth/calendar`, `https://www.googleapis.com/auth/calendar.events`, `openid`, `email` (de to siste brukes kun for å hente brukerens e-post fra `id_token`).
+7. Generer en AES-256-nøkkel for tokenkryptering: `openssl rand -base64 32` → `GOOGLE_TOKEN_ENC_KEY`. Uten denne bruker appen en volatil in-memory-nøkkel og varsler i logg; tokens overlever da ikke restart.
+
+### Familieplanleggern API
+
+| Metode | Path | Beskrivelse |
+|--------|------|-------------|
+| `POST` | `/api/google/oauth/start` | Returnerer `{ authUrl, state }`. Åpne `authUrl` i Custom Tab / nettleser. Krever JWT. |
+| `GET`  | `/api/google/oauth/callback` | Google redirecter hit. Bytter kode mot tokens, krypterer og lagrer, og 302-redirecter deretter til deep-link med `?status=ok|access_denied|invalid_state|missing_code|token_exchange_failed`. Krever *ikke* JWT (browser-hop). |
+| `GET`  | `/api/google/oauth/status` | `{ connected, email, timezone }` for innlogget bruker. Krever JWT. |
+| `DELETE` | `/api/google/oauth` | Sletter lagrede OAuth-tokens for innlogget bruker. Krever JWT. |
+| `POST` | `/api/familie/send` | Send melding til Familieplanleggern (JSON `{ message }`). Returnerer `412 Precondition Failed` hvis brukeren ikke har koblet Google. |
+| `POST` | `/api/familie/stream` | SSE-streamet svar (token-for-token). Samme 412-gate som `/send`. |
+| `GET`  | `/api/familie/{chatId}/history` | Pagineret chat-historikk. |
+
+### Android deep-link
+
+Etter vellykket OAuth-callback redirecter serveren browseren til `FAMILIE_DEEP_LINK_SUCCESS_URI` (default `familieplanleggern://oauth/done`). Registrer et intent-filter i Android-appen for å fange den og lukke Custom Tab:
+
+```xml
+<activity android:name=".OAuthCallbackActivity" android:exported="true">
+    <intent-filter android:autoVerify="false">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="familieplanleggern" android:host="oauth" android:path="/done" />
+    </intent-filter>
+</activity>
+```
+
+Les `status`-query-parameteren (`ok`, `access_denied`, `invalid_state`, `missing_code`, `token_exchange_failed`) og vis riktig UI. Bruk et eget schema for appen din (f.eks. `no.josefus.familieplanleggern://...`) og sett det via `FAMILIE_DEEP_LINK_SUCCESS_URI`.
+
+### Propose → confirm
+
+Alle mutasjoner (opprette hendelse, opprette kalender, slette hendelse) utføres i to steg:
+
+1. LLM kaller `proposeCreateEvent(...)` (eller tilsvarende). Verktøyet stashe'r handlingen og returnerer en `confirmationToken` + oppsummering.
+2. LLM viser oppsummeringen til brukeren og spør "Skal jeg gjøre dette?".
+3. Først når brukeren bekrefter eksplisitt, kaller LLM `confirmCreateEvent(confirmationToken)` som faktisk hitter Google.
+
+Tokens er bundet til `(userId, kind)` og er én-gangs med 15 min TTL — en annen bruker kan ikke konsumere tokenet, og det kan heller ikke gjenbrukes for en annen operasjon.
 
 ### 3. Run the Application
 
@@ -141,6 +202,15 @@ docker compose down      # stop and remove containers
 ### `application.yml`
 - Centralized configuration for server, database, AI, and email properties.
 - See `docs/web-search.md` for web search env and failure modes.
+- `familie.*` block holds Google OAuth client + default timezone + AES-GCM token-encryption key. `spring.datasource` / `spring.jpa` default to H2 in-mem; override via `DATASOURCE_*` env vars for Postgres prod.
+
+### `familie/` package
+- `FamilieplanleggernProperties` / `FamilieplanleggernConfiguration` – binds the `familie.*` yml block and wires the `TokenCipher` bean (AES-256-GCM) used to encrypt Google tokens at rest.
+- `TokenCipher` + `JpaUserGoogleCredentialStore` – per-user credential persistence. Refresh-tokens never touch the DB in plaintext.
+- `GoogleOAuthController` + `GoogleOAuthServiceImpl` – start/callback/status/disconnect endpoints, one-shot state cache, deep-link redirect.
+- `GoogleCalendarClient` / `GoogleCalendarClientImpl` – auto-refreshing Calendar v3 facade. Re-persists rotated access tokens on refresh.
+- `FamilieplanleggernTool` + `InMemoryProposalStore` – LangChain4j `@Tool` surface with the propose → confirm gate.
+- `FamilieplanleggernAssistant` + `FamilieChatService` + `FamilieController` – the agent's @AiService wiring, orchestration, and JWT-gated REST endpoints.
 
 ---
 

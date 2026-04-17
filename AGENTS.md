@@ -87,6 +87,7 @@ These are inferred from the codebase; keep changes consistent.
 
 ## Repository Structure
 - `src/main/kotlin/no/josefus/abuhint` app code.
+  - `familie/` – Familieplanleggern agent package: `TokenCipher` + JPA credential store, Google OAuth service/controller, Google Calendar client, `FamilieplanleggernTool` (propose → confirm), `FamilieplanleggernAssistant` + `FamilieChatService` + `FamilieController`. When adding new Familieplanleggern functionality, keep mutating operations behind the propose/confirm gate and never log plaintext Google tokens.
 - `src/test/kotlin/no/josefus/abuhint` tests.
 - `docs/` contains behavior/design notes for the chatbot system.
 - `assets/` contains images.
