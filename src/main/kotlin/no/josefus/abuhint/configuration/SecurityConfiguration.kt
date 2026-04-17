@@ -40,6 +40,8 @@ class SecurityConfiguration(
                     ).permitAll()
                     // Public: CORS preflight
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    // Public: Google OAuth callback (browser redirect from Google, no JWT)
+                    .requestMatchers(HttpMethod.GET, "/api/google/oauth/callback").permitAll()
                     // All other requests require a valid JWT
                     .anyRequest().authenticated()
             }

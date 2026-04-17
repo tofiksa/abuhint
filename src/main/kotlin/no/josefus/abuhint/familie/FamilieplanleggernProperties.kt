@@ -10,6 +10,7 @@ data class FamilieplanleggernProperties(
     val googleRedirectUri: String,
     val defaultTimezone: String,
     val tokenEncryptionKeyBase64: String,
+    val deepLinkSuccessUri: String = "familieplanleggern://oauth/done",
 ) {
     fun isConfigured(): Boolean =
         googleClientId.isNotBlank() &&
@@ -20,5 +21,7 @@ data class FamilieplanleggernProperties(
     fun oauthScopes(): List<String> = listOf(
         "https://www.googleapis.com/auth/calendar",
         "https://www.googleapis.com/auth/calendar.events",
+        "openid",
+        "email",
     )
 }

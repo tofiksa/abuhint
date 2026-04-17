@@ -16,12 +16,14 @@ class FamilieplanleggernConfiguration {
         @Value("\${familie.google.redirect-uri:}") googleRedirectUri: String,
         @Value("\${familie.default-timezone:Europe/Oslo}") defaultTimezone: String,
         @Value("\${familie.token-encryption-key:}") tokenEncryptionKeyBase64: String,
+        @Value("\${familie.deep-link-success-uri:familieplanleggern://oauth/done}") deepLinkSuccessUri: String,
     ): FamilieplanleggernProperties = FamilieplanleggernProperties(
         googleClientId = googleClientId,
         googleClientSecret = googleClientSecret,
         googleRedirectUri = googleRedirectUri,
         defaultTimezone = defaultTimezone,
         tokenEncryptionKeyBase64 = tokenEncryptionKeyBase64,
+        deepLinkSuccessUri = deepLinkSuccessUri,
     )
 
     @Bean
