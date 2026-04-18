@@ -35,7 +35,6 @@ class GoogleOAuthServiceImpl(
             properties.oauthScopes(),
         )
             .setAccessType("offline")
-            .setApprovalPrompt("force")
             .build()
     }
 
