@@ -6,6 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import dev.langchain4j.agent.tool.P
 import dev.langchain4j.agent.tool.Tool
+import dev.langchain4j.agent.tool.ToolMemoryId
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
@@ -30,7 +31,8 @@ import java.util.concurrent.TimeUnit
  *
  * Read-only operations (list) run immediately.
  *
- * User identity is resolved from the Spring [SecurityContextHolder] (JWT subject).
+ * User identity: [FamilieUserChatRegistry] keyed by chat memory id ([ToolMemoryId]), with
+ * fallback to [SecurityContextHolder] for unit tests.
  */
 @Component
 class FamilieplanleggernTool(
@@ -46,7 +48,7 @@ class FamilieplanleggernTool(
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
     @Tool("List the user's Google Calendars (id, name, color). Use this before creating or listing events so you know which calendar to use.")
-    fun listCalendars(): String = withUser { userId ->
+    fun listCalendars(@ToolMemoryId memoryId: String): String = withUser(memoryId) { userId ->
         val calendars = calendarClient.listCalendars(userId)
         if (calendars.isEmpty()) "{\"calendars\":[], \"message\":\"Brukeren har ingen kalendere.\"}"
         else json.writeValueAsString(mapOf("calendars" to calendars))
@@ -54,9 +56,10 @@ class FamilieplanleggernTool(
 
     @Tool("List upcoming events in a calendar for the next N days. Use for read-only overviews of the user's schedule.")
     fun listUpcomingEvents(
+        @ToolMemoryId memoryId: String,
         @P("The Google Calendar id (from listCalendars). Use 'primary' for the primary calendar.") calendarId: String,
         @P("Number of days ahead to include, 1-30. Default 7.") daysAhead: Int,
-    ): String = withUser { userId ->
+    ): String = withUser(memoryId) { userId ->
         val now = Instant.now()
         val end = now.plusSeconds(daysAhead.coerceIn(1, 30) * 24L * 3600L)
         val events = calendarClient.listEvents(userId, calendarId, now, end, maxResults = 50)
@@ -65,6 +68,7 @@ class FamilieplanleggernTool(
 
     @Tool("Propose creating a calendar event. Does NOT execute — returns a confirmationToken that the user must approve. Call confirmCreateEvent with the token once the user confirms in plain language.")
     fun proposeCreateEvent(
+        @ToolMemoryId memoryId: String,
         @P("Target Google Calendar id.") calendarId: String,
         @P("Event title, e.g. 'Tannlege'.") summary: String,
         @P("Start time in ISO-8601 with offset, e.g. 2026-05-10T09:00:00+02:00.") startIso: String,
@@ -72,7 +76,7 @@ class FamilieplanleggernTool(
         @P("Optional description / notes.") description: String?,
         @P("Optional location string.") location: String?,
         @P("Optional comma-separated list of attendee emails.") attendeesCsv: String?,
-    ): String = withUser { userId ->
+    ): String = withUser(memoryId) { userId ->
         val start = parseIsoOrNull(startIso)
             ?: return@withUser json.writeValueAsString(mapOf("error" to "Ugyldig startdato: '$startIso'. Bruk ISO-8601 (f.eks. 2026-05-10T09:00:00+02:00)."))
         val end = parseIsoOrNull(endIso)
@@ -119,7 +123,10 @@ class FamilieplanleggernTool(
     }
 
     @Tool("Execute a previously proposed event creation. Requires the confirmationToken from proposeCreateEvent and that the user has explicitly confirmed.")
-    fun confirmCreateEvent(@P("Token returned by proposeCreateEvent.") confirmationToken: String): String = withUser { userId ->
+    fun confirmCreateEvent(
+        @ToolMemoryId memoryId: String,
+        @P("Token returned by proposeCreateEvent.") confirmationToken: String,
+    ): String = withUser(memoryId) { userId ->
         val proposal = proposalStore.consume(confirmationToken, userId, ProposalKind.CREATE_EVENT)
             ?: return@withUser invalidTokenResponse()
         val p = proposal.createEvent!!
@@ -141,9 +148,10 @@ class FamilieplanleggernTool(
 
     @Tool("Propose creating a new Google Calendar (used as a category, e.g. 'Trening', 'Jobb'). Returns a confirmationToken.")
     fun proposeCreateCalendar(
+        @ToolMemoryId memoryId: String,
         @P("Calendar display name.") name: String,
         @P("Optional 6-digit hex color like '#3366ff'. Null to use the Google default.") colorHex: String?,
-    ): String = withUser { userId ->
+    ): String = withUser(memoryId) { userId ->
         val proposal = PendingProposal(
             userId = userId,
             kind = ProposalKind.CREATE_CALENDAR,
@@ -162,7 +170,10 @@ class FamilieplanleggernTool(
     }
 
     @Tool("Execute a previously proposed calendar creation.")
-    fun confirmCreateCalendar(@P("Token returned by proposeCreateCalendar.") confirmationToken: String): String = withUser { userId ->
+    fun confirmCreateCalendar(
+        @ToolMemoryId memoryId: String,
+        @P("Token returned by proposeCreateCalendar.") confirmationToken: String,
+    ): String = withUser(memoryId) { userId ->
         val proposal = proposalStore.consume(confirmationToken, userId, ProposalKind.CREATE_CALENDAR)
             ?: return@withUser invalidTokenResponse()
         val p = proposal.createCalendar!!
@@ -172,9 +183,10 @@ class FamilieplanleggernTool(
 
     @Tool("Propose deleting an event from a calendar. Returns a confirmationToken.")
     fun proposeDeleteEvent(
+        @ToolMemoryId memoryId: String,
         @P("Calendar id containing the event.") calendarId: String,
         @P("Event id to delete.") eventId: String,
-    ): String = withUser { userId ->
+    ): String = withUser(memoryId) { userId ->
         val proposal = PendingProposal(
             userId = userId,
             kind = ProposalKind.DELETE_EVENT,
@@ -193,7 +205,10 @@ class FamilieplanleggernTool(
     }
 
     @Tool("Execute a previously proposed event deletion.")
-    fun confirmDeleteEvent(@P("Token returned by proposeDeleteEvent.") confirmationToken: String): String = withUser { userId ->
+    fun confirmDeleteEvent(
+        @ToolMemoryId memoryId: String,
+        @P("Token returned by proposeDeleteEvent.") confirmationToken: String,
+    ): String = withUser(memoryId) { userId ->
         val proposal = proposalStore.consume(confirmationToken, userId, ProposalKind.DELETE_EVENT)
             ?: return@withUser invalidTokenResponse()
         val p = proposal.deleteEvent!!
@@ -204,9 +219,15 @@ class FamilieplanleggernTool(
     private fun invalidTokenResponse(): String =
         json.writeValueAsString(mapOf("error" to "Ugyldig eller utløpt confirmationToken. Be brukeren bekrefte på nytt."))
 
-    private inline fun <R> withUser(block: (String) -> R): String {
-        val auth = SecurityContextHolder.getContext().authentication
-        val userId = auth?.name
+    private fun resolveUserId(memoryId: String): String? {
+        if (memoryId.isNotBlank()) {
+            FamilieUserChatRegistry.userIdFor(memoryId)?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return SecurityContextHolder.getContext().authentication?.name?.takeIf { it.isNotBlank() }
+    }
+
+    private inline fun <R> withUser(memoryId: String, block: (String) -> R): String {
+        val userId = resolveUserId(memoryId)
         if (userId.isNullOrBlank()) {
             return json.writeValueAsString(mapOf("error" to "Ingen autentisert bruker i kontekst."))
         }

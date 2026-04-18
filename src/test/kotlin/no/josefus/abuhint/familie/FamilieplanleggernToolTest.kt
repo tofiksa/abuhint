@@ -1,5 +1,6 @@
 package no.josefus.abuhint.familie
 
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -17,6 +18,10 @@ import kotlin.test.assertTrue
 
 class FamilieplanleggernToolTest {
 
+    private companion object {
+        const val MEMORY_ID = "tool-test-memory-id"
+    }
+
     private val calendarClient: GoogleCalendarClient = mock()
     private val credentialStore: UserGoogleCredentialStore = mock()
     private val proposalStore = InMemoryProposalStore()
@@ -32,6 +37,7 @@ class FamilieplanleggernToolTest {
 
     @BeforeEach
     fun setupAuth() {
+        FamilieUserChatRegistry.bind(MEMORY_ID, "user-1")
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken("user-1", null, emptyList())
         whenever(credentialStore.load("user-1")).thenReturn(
@@ -47,6 +53,12 @@ class FamilieplanleggernToolTest {
         )
     }
 
+    @AfterEach
+    fun tearDown() {
+        FamilieUserChatRegistry.unbind(MEMORY_ID)
+        SecurityContextHolder.clearContext()
+    }
+
     @Test
     fun `listCalendars returns user's calendars when connected`() {
         whenever(calendarClient.listCalendars("user-1")).thenReturn(
@@ -56,7 +68,7 @@ class FamilieplanleggernToolTest {
             )
         )
 
-        val result = tool.listCalendars()
+        val result = tool.listCalendars(MEMORY_ID)
 
         assertTrue(result.contains("Jobb"))
         assertTrue(result.contains("cal1"))
@@ -67,7 +79,7 @@ class FamilieplanleggernToolTest {
     fun `listCalendars returns not-connected hint when user has not linked google`() {
         whenever(credentialStore.load("user-1")).thenReturn(null)
 
-        val result = tool.listCalendars()
+        val result = tool.listCalendars(MEMORY_ID)
 
         assertTrue(result.contains("ikke koblet", ignoreCase = true) || result.contains("not connected", ignoreCase = true))
         verify(calendarClient, never()).listCalendars(any())
@@ -76,6 +88,7 @@ class FamilieplanleggernToolTest {
     @Test
     fun `proposeCreateEvent stores proposal and returns confirmation token without hitting google`() {
         val result = tool.proposeCreateEvent(
+            memoryId = MEMORY_ID,
             calendarId = "cal1",
             summary = "Tannlege",
             startIso = "2026-05-10T09:00:00+02:00",
@@ -93,6 +106,7 @@ class FamilieplanleggernToolTest {
     @Test
     fun `confirmCreateEvent executes pending proposal and clears it`() {
         val proposeResult = tool.proposeCreateEvent(
+            memoryId = MEMORY_ID,
             calendarId = "cal1",
             summary = "Middag",
             startIso = "2026-05-10T18:00:00+02:00",
@@ -107,17 +121,18 @@ class FamilieplanleggernToolTest {
                 Instant.parse("2026-05-10T16:00:00Z"), Instant.parse("2026-05-10T17:30:00Z"), "https://goo.gl/x")
         )
 
-        val confirmResult = tool.confirmCreateEvent(token)
+        val confirmResult = tool.confirmCreateEvent(MEMORY_ID, token)
 
         assertTrue(confirmResult.contains("evt1"))
         verify(calendarClient).createEvent(eq("user-1"), eq("cal1"), any())
-        val second = tool.confirmCreateEvent(token)
+        val second = tool.confirmCreateEvent(MEMORY_ID, token)
         assertTrue(second.contains("ugyldig", ignoreCase = true) || second.contains("invalid", ignoreCase = true))
     }
 
     @Test
     fun `confirmCreateEvent refuses to execute proposal created by another user`() {
         val proposeResult = tool.proposeCreateEvent(
+            memoryId = MEMORY_ID,
             calendarId = "cal1",
             summary = "Secret",
             startIso = "2026-05-10T09:00:00+02:00",
@@ -128,13 +143,14 @@ class FamilieplanleggernToolTest {
         )
         val token = extractToken(proposeResult)
 
+        FamilieUserChatRegistry.unbind(MEMORY_ID)
         SecurityContextHolder.getContext().authentication =
             UsernamePasswordAuthenticationToken("user-2", null, emptyList())
         whenever(credentialStore.load("user-2")).thenReturn(
             GoogleCredentials("user-2", "rt", "at", null, "scope", "b@x", "UTC")
         )
 
-        val confirmResult = tool.confirmCreateEvent(token)
+        val confirmResult = tool.confirmCreateEvent(MEMORY_ID, token)
 
         assertTrue(
             confirmResult.contains("ugyldig", ignoreCase = true) ||
@@ -145,13 +161,13 @@ class FamilieplanleggernToolTest {
 
     @Test
     fun `proposeCreateCalendar followed by confirm creates calendar`() {
-        val propose = tool.proposeCreateCalendar("Familie", "#3366ff")
+        val propose = tool.proposeCreateCalendar(MEMORY_ID, "Familie", "#3366ff")
         val token = extractToken(propose)
         whenever(calendarClient.createCalendar("user-1", "Familie", "#3366ff")).thenReturn(
             CalendarSummary("new-cal-id", "Familie", "#3366ff", "Europe/Oslo", primary = false)
         )
 
-        val confirm = tool.confirmCreateCalendar(token)
+        val confirm = tool.confirmCreateCalendar(MEMORY_ID, token)
 
         assertTrue(confirm.contains("new-cal-id"))
         verify(calendarClient).createCalendar("user-1", "Familie", "#3366ff")
@@ -159,10 +175,10 @@ class FamilieplanleggernToolTest {
 
     @Test
     fun `proposeDeleteEvent followed by confirm deletes event`() {
-        val propose = tool.proposeDeleteEvent("cal1", "evt1")
+        val propose = tool.proposeDeleteEvent(MEMORY_ID, "cal1", "evt1")
         val token = extractToken(propose)
 
-        val confirm = tool.confirmDeleteEvent(token)
+        val confirm = tool.confirmDeleteEvent(MEMORY_ID, token)
 
         assertTrue(confirm.contains("slettet", ignoreCase = true) || confirm.contains("deleted", ignoreCase = true))
         verify(calendarClient).deleteEvent("user-1", "cal1", "evt1")
@@ -179,7 +195,7 @@ class FamilieplanleggernToolTest {
             )
         )
 
-        val result = tool.listUpcomingEvents("cal1", daysAhead = 7)
+        val result = tool.listUpcomingEvents(MEMORY_ID, "cal1", daysAhead = 7)
 
         assertTrue(result.contains("Yoga"))
         assertTrue(result.contains("Tannlege"))
@@ -187,14 +203,14 @@ class FamilieplanleggernToolTest {
 
     @Test
     fun `confirm with unknown token returns helpful error`() {
-        val result = tool.confirmCreateEvent("not-a-real-token")
+        val result = tool.confirmCreateEvent(MEMORY_ID, "not-a-real-token")
         assertTrue(result.contains("ugyldig", ignoreCase = true) || result.contains("invalid", ignoreCase = true))
         verify(calendarClient, never()).createEvent(any(), any(), any())
     }
 
     @Test
     fun `propose rejects invalid iso8601 dates`() {
-        val result = tool.proposeCreateEvent("cal1", "X", "not-a-date", "2026-05-10T10:00:00+02:00", null, null, null)
+        val result = tool.proposeCreateEvent(MEMORY_ID, "cal1", "X", "not-a-date", "2026-05-10T10:00:00+02:00", null, null, null)
         assertFalse(result.contains("confirmationToken"))
         assertTrue(result.contains("dato", ignoreCase = true) || result.contains("date", ignoreCase = true))
     }

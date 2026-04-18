@@ -3,6 +3,7 @@ package no.josefus.abuhint.familie
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -30,13 +31,13 @@ class FamilieControllerPreconditionTest {
 
         val response = controller.sendMessage(
             chatId = null,
-            request = FamilieController.FamilieMessageRequest("hei"),
+            request = FamilieMessageRequest("hei"),
         )
 
         assertEquals(412, response.statusCode.value())
         val text = response.body!!.first().text
         assertTrue(text!!.contains("Google", ignoreCase = true))
-        verify(chatService, never()).processChat(any(), any())
+        verify(chatService, never()).processChat(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -44,15 +45,15 @@ class FamilieControllerPreconditionTest {
         whenever(credentialStore.load("user-42")).thenReturn(
             GoogleCredentials("user-42", "rt", "at", null, "scope", "e@x", "UTC")
         )
-        whenever(chatService.processChat(any(), any())).thenReturn("Klart!")
+        whenever(chatService.processChat(any(), any(), any(), anyOrNull())).thenReturn("Klart!")
 
         val response = controller.sendMessage(
             chatId = "chat-1",
-            request = FamilieController.FamilieMessageRequest("hei"),
+            request = FamilieMessageRequest("hei"),
         )
 
         assertEquals(200, response.statusCode.value())
         assertEquals("Klart!", response.body!!.first().text)
-        verify(chatService).processChat("chat-1", "hei")
+        verify(chatService).processChat("chat-1", "hei", "user-42", null)
     }
 }

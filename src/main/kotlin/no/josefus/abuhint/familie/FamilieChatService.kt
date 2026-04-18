@@ -6,6 +6,10 @@ import no.josefus.abuhint.service.ChatIdContextHolder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Thin orchestrator around [FamilieplanleggernAssistant]. Keeps the chat-memory wiring
@@ -17,12 +21,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 class FamilieChatService(
     private val assistant: FamilieplanleggernAssistant,
     private val chatMemoryStore: ConcretePineconeChatMemoryStore,
+    private val properties: FamilieplanleggernProperties,
 ) {
 
     private val log = LoggerFactory.getLogger(FamilieChatService::class.java)
 
-    fun processChat(chatId: String, userMessage: String): String {
-        val dateTime = java.time.LocalDateTime.now().toString()
+    fun processChat(chatId: String, userMessage: String, userId: String, metadata: FamilieClientMetadata?): String {
+        val dateTime = buildDateTimeContext(metadata)
+        FamilieUserChatRegistry.bind(chatId, userId)
         ChatIdContextHolder.set(chatId)
         return try {
             assistant.chat(chatId, userMessage, dateTime)
@@ -30,18 +36,39 @@ class FamilieChatService(
             log.error("Familieplanleggern chat failed for chatId={}: {}", chatId, e.message, e)
             "Beklager, teknisk feil mot Familieplanleggern. Prøv igjen om litt."
         } finally {
+            FamilieUserChatRegistry.unbind(chatId)
             ChatIdContextHolder.clear()
         }
     }
 
-    fun processChatStream(chatId: String, userMessage: String): SseEmitter {
+    fun processChatStream(
+        chatId: String,
+        userMessage: String,
+        userId: String,
+        metadata: FamilieClientMetadata?,
+    ): SseEmitter {
         val emitter = SseEmitter(120_000L)
-        val dateTime = java.time.LocalDateTime.now().toString()
+        val dateTime = buildDateTimeContext(metadata)
+
+        FamilieUserChatRegistry.bind(chatId, userId)
         ChatIdContextHolder.set(chatId)
+        val cleanedUp = AtomicBoolean(false)
+
+        fun cleanup() {
+            if (!cleanedUp.compareAndSet(false, true)) return
+            FamilieUserChatRegistry.unbind(chatId)
+            ChatIdContextHolder.clear()
+        }
+
         val tokenStream = try {
             assistant.chatStream(chatId, userMessage, dateTime)
-        } finally {
-            ChatIdContextHolder.clear()
+        } catch (e: Exception) {
+            cleanup()
+            log.error("Familieplanleggern stream setup failed for chatId={}: {}", chatId, e.message, e)
+            try {
+                emitter.completeWithError(e)
+            } catch (_: Exception) { /* client gone */ }
+            return emitter
         }
 
         tokenStream
@@ -58,6 +85,8 @@ class FamilieChatService(
                     emitter.complete()
                 } catch (e: Exception) {
                     log.debug("Error completing familie SSE: {}", e.message)
+                } finally {
+                    cleanup()
                 }
             }
             .onError { err ->
@@ -66,10 +95,47 @@ class FamilieChatService(
                     emitter.send(SseEmitter.event().data("{\"error\":\"${err.message}\"}"))
                     emitter.completeWithError(err)
                 } catch (_: Exception) { /* client likely gone */ }
+                finally {
+                    cleanup()
+                }
             }
-            .start()
+        emitter.onCompletion { cleanup() }
+
+        try {
+            tokenStream.start()
+        } catch (e: Exception) {
+            log.error("Familie tokenStream.start failed for chatId={}: {}", chatId, e.message, e)
+            cleanup()
+            try {
+                emitter.completeWithError(e)
+            } catch (_: Exception) { /* ignore */ }
+        }
         return emitter
     }
 
     fun getChatHistory(chatId: String): List<ChatMessage> = chatMemoryStore.getMessages(chatId)
+
+    /**
+     * Richer than raw server local time: uses optional [metadata] from the client so the model
+     * can interpret «om 5 dager» relative to the user's timezone and clock.
+     */
+    internal fun buildDateTimeContext(metadata: FamilieClientMetadata?): String {
+        val zone = metadata?.timezone?.let { z ->
+            runCatching { ZoneId.of(z.trim()) }.getOrNull()
+        } ?: ZoneId.of(properties.defaultTimezone)
+        val instant = metadata?.sentAt?.let { s ->
+            runCatching { Instant.parse(s.trim()) }.getOrNull()
+        } ?: Instant.now()
+        val local = instant.atZone(zone)
+        val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        return buildString {
+            append("Brukerens referanseklokke: ")
+            append(local.format(fmt))
+            append(" (")
+            append(zone.id)
+            append("). ISO-instant: ")
+            append(instant)
+            append(". Bruk dette når du tolker relative uttrykk som «i morgen», «neste uke» eller «om 5 dager».")
+        }
+    }
 }

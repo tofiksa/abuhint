@@ -66,7 +66,8 @@ class FamilieController(
         val preconditionError = requireGoogleConnected()
         if (preconditionError != null) return preconditionError
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val reply = chatService.processChat(sessionId, request.message)
+        val userId = currentUserId()
+        val reply = chatService.processChat(sessionId, request.message, userId, request.metadata)
         return ResponseEntity.ok(listOf(OpenAiCompatibleContentItem(type = "text", text = reply)))
     }
 
@@ -82,7 +83,8 @@ class FamilieController(
         val preconditionError = requireGoogleConnected()
         if (preconditionError != null) return preconditionError
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        return chatService.processChatStream(sessionId, request.message)
+        val userId = currentUserId()
+        return chatService.processChatStream(sessionId, request.message, userId, request.metadata)
     }
 
     @Operation(summary = "Hent samtalehistorikk for Familieplanleggern")
@@ -132,10 +134,4 @@ class FamilieController(
         )
         return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(body)
     }
-
-    @Schema(description = "Forespørsel med brukerens melding til Familieplanleggern")
-    data class FamilieMessageRequest(
-        @field:Schema(description = "Meldingsteksten", example = "Legg til middag med svigerforeldrene på lørdag 18:00")
-        val message: String,
-    )
 }
