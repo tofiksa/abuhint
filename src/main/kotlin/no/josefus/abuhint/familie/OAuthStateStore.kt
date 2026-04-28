@@ -6,6 +6,16 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
+enum class OAuthReturnChannel {
+    MOBILE,
+    WEB,
+}
+
+data class OAuthStartContext(
+    val userId: String,
+    val returnChannel: OAuthReturnChannel,
+)
+
 /**
  * Short-lived mapping between a random OAuth state parameter and the authenticated
  * user that initiated the flow. Used to defend the `/callback` endpoint against CSRF
@@ -18,24 +28,24 @@ class InMemoryOAuthStateStore {
     private val cache = Caffeine.newBuilder()
         .expireAfterWrite(10, TimeUnit.MINUTES)
         .maximumSize(10_000)
-        .build<String, String>()
+        .build<String, OAuthStartContext>()
 
     private val random = SecureRandom()
 
-    fun issue(userId: String): String {
+    fun issue(userId: String, returnChannel: OAuthReturnChannel = OAuthReturnChannel.MOBILE): String {
         val bytes = ByteArray(32).also(random::nextBytes)
         val state = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-        cache.put(state, userId)
+        cache.put(state, OAuthStartContext(userId = userId, returnChannel = returnChannel))
         return state
     }
 
     /**
-     * Returns the `userId` associated with [state] and atomically invalidates it,
+     * Returns context for [state] and atomically invalidates it,
      * preventing replay. Returns `null` if the state is unknown or expired.
      */
-    fun consume(state: String): String? {
-        val userId = cache.getIfPresent(state) ?: return null
+    fun consume(state: String): OAuthStartContext? {
+        val ctx = cache.getIfPresent(state) ?: return null
         cache.invalidate(state)
-        return userId
+        return ctx
     }
 }

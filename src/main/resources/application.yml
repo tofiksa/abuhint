@@ -80,6 +80,7 @@ familie:
     redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:8080/api/google/oauth/callback}
   default-timezone: ${FAMILIE_DEFAULT_TIMEZONE:Europe/Oslo}
   token-encryption-key: ${GOOGLE_TOKEN_ENC_KEY:}
+  web-oauth-success-uri: ${FAMILIE_WEB_OAUTH_SUCCESS_URI:}
 web-search:
   enabled: ${WEB_SEARCH_ENABLED:true}
   provider: ${WEB_SEARCH_PROVIDER:tavily}

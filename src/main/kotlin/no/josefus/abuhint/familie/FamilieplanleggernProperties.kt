@@ -11,6 +11,13 @@ data class FamilieplanleggernProperties(
     val defaultTimezone: String,
     val tokenEncryptionKeyBase64: String,
     val deepLinkSuccessUri: String = "familieplanleggern://oauth/done",
+    /**
+     * Final browser redirect after the backend `/api/google/oauth/callback` when the flow
+     * was started with `client=web`. Must match a route in the SPA (e.g.
+     * `https://app.example/dashboard/familie/oauth/callback`). Google still redirects
+     * to [googleRedirectUri] only; this URI is used for the second hop back to the webapp.
+     */
+    val webOAuthSuccessUri: String = "",
 ) {
     fun isConfigured(): Boolean =
         googleClientId.isNotBlank() &&

@@ -17,6 +17,7 @@ class FamilieplanleggernConfiguration {
         @Value("\${familie.default-timezone:Europe/Oslo}") defaultTimezone: String,
         @Value("\${familie.token-encryption-key:}") tokenEncryptionKeyBase64: String,
         @Value("\${familie.deep-link-success-uri:familieplanleggern://oauth/done}") deepLinkSuccessUri: String,
+        @Value("\${familie.web-oauth-success-uri:}") webOAuthSuccessUri: String,
     ): FamilieplanleggernProperties = FamilieplanleggernProperties(
         googleClientId = googleClientId,
         googleClientSecret = googleClientSecret,
@@ -24,6 +25,7 @@ class FamilieplanleggernConfiguration {
         defaultTimezone = defaultTimezone,
         tokenEncryptionKeyBase64 = tokenEncryptionKeyBase64,
         deepLinkSuccessUri = deepLinkSuccessUri,
+        webOAuthSuccessUri = webOAuthSuccessUri,
     )
 
     @Bean
