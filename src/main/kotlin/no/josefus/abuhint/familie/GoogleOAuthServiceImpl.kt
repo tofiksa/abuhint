@@ -42,6 +42,7 @@ class GoogleOAuthServiceImpl(
         flow.newAuthorizationUrl()
             .setRedirectUri(properties.googleRedirectUri)
             .setState(state)
+            .set("include_granted_scopes", true)
             .set("prompt", "consent")
             .build()
 

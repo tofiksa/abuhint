@@ -102,7 +102,7 @@ JPA_DDL_AUTO=update
 | Metode | Path | Beskrivelse |
 |--------|------|-------------|
 | `POST` | `/api/google/oauth/start` | Returnerer `{ authUrl, state }`. Åpne `authUrl` i Custom Tab / nettleser. Krever JWT. |
-| `GET`  | `/api/google/oauth/callback` | Google redirecter hit. Bytter kode mot tokens, krypterer og lagrer, og 302-redirecter deretter til deep-link med `?status=ok|access_denied|invalid_state|missing_code|token_exchange_failed`. Krever *ikke* JWT (browser-hop). |
+| `GET`  | `/api/google/oauth/callback` | Google redirecter hit. Bytter kode mot tokens, krypterer og lagrer, og 302-redirecter deretter til deep-link med `?status=ok|access_denied|invalid_state|missing_code|insufficient_scope|token_exchange_failed`. Krever *ikke* JWT (browser-hop). |
 | `GET`  | `/api/google/oauth/status` | `{ connected, email, timezone }` for innlogget bruker. Krever JWT. |
 | `DELETE` | `/api/google/oauth` | Sletter lagrede OAuth-tokens for innlogget bruker. Krever JWT. |
 | `POST` | `/api/familie/send` | Send melding til Familieplanleggern (JSON `{ message }`). Returnerer `412 Precondition Failed` hvis brukeren ikke har koblet Google. |
@@ -124,7 +124,7 @@ Etter vellykket OAuth-callback redirecter serveren browseren til `FAMILIE_DEEP_L
 </activity>
 ```
 
-Les `status`-query-parameteren (`ok`, `access_denied`, `invalid_state`, `missing_code`, `token_exchange_failed`) og vis riktig UI. Bruk et eget schema for appen din (f.eks. `no.josefus.familieplanleggern://...`) og sett det via `FAMILIE_DEEP_LINK_SUCCESS_URI`.
+Les `status`-query-parameteren (`ok`, `access_denied`, `invalid_state`, `missing_code`, `insufficient_scope`, `token_exchange_failed`) og vis riktig UI. Bruk et eget schema for appen din (f.eks. `no.josefus.familieplanleggern://...`) og sett det via `FAMILIE_DEEP_LINK_SUCCESS_URI`.
 
 ### Propose → confirm
 

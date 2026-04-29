@@ -90,6 +90,10 @@ class GoogleOAuthController(
 
         return try {
             val tokens = oauthService.exchangeCodeForTokens(code, state)
+            if (!hasRequiredCalendarScopes(tokens.scope)) {
+                log.warn("OAuth callback rejected for userId={} — required Calendar scopes were not granted", userId)
+                return redirectWithStatus("insufficient_scope")
+            }
             credentialStore.save(
                 GoogleCredentials(
                     userId = userId,
@@ -141,6 +145,11 @@ class GoogleOAuthController(
                 properties.webOAuthSuccessUri.ifBlank { properties.deepLinkSuccessUri }
             OAuthReturnChannel.MOBILE, null -> properties.deepLinkSuccessUri
         }
+
+    private fun hasRequiredCalendarScopes(grantedScope: String): Boolean {
+        val granted = grantedScope.split(' ').filter { it.isNotBlank() }.toSet()
+        return properties.requiredCalendarScopes().all { it in granted }
+    }
 
     private fun uriWithStatus(base: String, status: String): URI {
         val separator = if (base.contains('?')) '&' else '?'

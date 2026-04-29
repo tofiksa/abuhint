@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
@@ -87,7 +88,7 @@ class GoogleOAuthControllerTest {
                 refreshToken = "rt",
                 accessToken = "at",
                 accessTokenExpiresAt = Instant.parse("2026-05-01T00:00:00Z"),
-                scope = "https://www.googleapis.com/auth/calendar",
+                scope = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
                 email = "user@example.com",
             )
         )
@@ -109,7 +110,7 @@ class GoogleOAuthControllerTest {
                 refreshToken = "rt",
                 accessToken = "at",
                 accessTokenExpiresAt = Instant.parse("2026-05-01T00:00:00Z"),
-                scope = "https://www.googleapis.com/auth/calendar",
+                scope = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
                 email = "user@example.com",
             )
         )
@@ -124,11 +125,34 @@ class GoogleOAuthControllerTest {
                 refreshToken = "rt",
                 accessToken = "at",
                 accessTokenExpiresAt = Instant.parse("2026-05-01T00:00:00Z"),
-                scope = "https://www.googleapis.com/auth/calendar",
+                scope = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events",
                 email = "user@example.com",
                 timezone = null,
             )
         )
+    }
+
+    @Test
+    fun `callback does not save credentials when required calendar scopes were denied`() {
+        val state = stateStore.issue(userId = "user-42")
+        whenever(googleOAuthService.exchangeCodeForTokens("auth-code", state)).thenReturn(
+            GoogleTokenExchangeResult(
+                refreshToken = "rt",
+                accessToken = "at",
+                accessTokenExpiresAt = Instant.parse("2026-05-01T00:00:00Z"),
+                scope = "openid email",
+                email = "user@example.com",
+            )
+        )
+
+        val response = controller.callback(code = "auth-code", state = state, error = null)
+
+        assertEquals(302, response.statusCode.value())
+        assertEquals(
+            "familieplanleggern://oauth/done?status=insufficient_scope",
+            response.headers.location?.toString(),
+        )
+        verify(store, never()).save(any())
     }
 
     @Test

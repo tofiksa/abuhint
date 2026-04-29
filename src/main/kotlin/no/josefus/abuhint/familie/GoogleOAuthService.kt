@@ -9,8 +9,10 @@ import java.time.Instant
 interface GoogleOAuthService {
 
     /**
-     * Builds a Google authorization URL with `access_type=offline` and `prompt=consent`
-     * so we get a refresh token back on the first consent.
+     * Builds a Google authorization URL with `access_type=offline`,
+     * `include_granted_scopes=true`, and `prompt=consent` so we get a refresh
+     * token back on the first consent and comply with Google's incremental
+     * authorization guidance.
      */
     fun buildAuthUrl(state: String): String
 

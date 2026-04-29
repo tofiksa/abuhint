@@ -31,4 +31,9 @@ data class FamilieplanleggernProperties(
         "openid",
         "email",
     )
+
+    fun requiredCalendarScopes(): List<String> = listOf(
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/calendar.events",
+    )
 }
