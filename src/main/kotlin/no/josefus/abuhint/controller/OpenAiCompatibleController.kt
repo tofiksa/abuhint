@@ -11,9 +11,11 @@ import no.josefus.abuhint.dto.OpenAiCompatibleChatCompletionResponse
 import no.josefus.abuhint.service.OpenAiCompatibleService
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
@@ -128,9 +130,14 @@ class OpenAiCompatibleController(
     )
     @PostMapping(produces = [MediaType.APPLICATION_JSON_VALUE])
     fun createChatCompletion(
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody request: OpenAiCompatibleChatCompletionRequest,
     ): ResponseEntity<OpenAiCompatibleChatCompletionResponse> {
-        val response = openAiCompatibleService.createChatCompletion(request)
+        val response = openAiCompatibleService.createChatCompletion(
+            request,
+            currentUserId(),
+            clientPlatform.normalizedPlatform(),
+        )
         return ResponseEntity.ok(response)
     }
 
@@ -140,8 +147,19 @@ class OpenAiCompatibleController(
     )
     @PostMapping("/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun createStreamingChatCompletion(
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody request: OpenAiCompatibleChatCompletionRequest,
     ): SseEmitter {
-        return openAiCompatibleService.createStreamingChatCompletion(request)
+        return openAiCompatibleService.createStreamingChatCompletion(
+            request,
+            currentUserId(),
+            clientPlatform.normalizedPlatform(),
+        )
     }
+
+    private fun currentUserId(): String =
+        SecurityContextHolder.getContext().authentication?.name
+            ?: throw IllegalStateException("No authenticated user in SecurityContext")
+
+    private fun String?.normalizedPlatform(): String = this?.trim()?.takeIf { it.isNotBlank() } ?: "unknown"
 }

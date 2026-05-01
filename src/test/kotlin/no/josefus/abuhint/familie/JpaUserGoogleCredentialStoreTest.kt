@@ -3,10 +3,12 @@ package no.josefus.abuhint.familie
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.domain.EntityScan
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Import
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
+import org.springframework.test.context.TestPropertySource
 import java.time.Instant
 import java.util.Base64
 import kotlin.test.assertEquals
@@ -15,7 +17,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(JpaUserGoogleCredentialStoreTest.Config::class)
+@TestPropertySource(
+    properties = [
+        "spring.datasource.url=jdbc:h2:mem:google_credential_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;INIT=CREATE DOMAIN IF NOT EXISTS TIMESTAMPTZ AS TIMESTAMP WITH TIME ZONE",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+    ],
+)
 class JpaUserGoogleCredentialStoreTest {
 
     @Autowired

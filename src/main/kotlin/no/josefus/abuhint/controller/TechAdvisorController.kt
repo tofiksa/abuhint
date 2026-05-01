@@ -11,8 +11,10 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import no.josefus.abuhint.dto.ChatRequest
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
 import no.josefus.abuhint.service.ChatService
+import no.josefus.abuhint.service.TokenUsageContext
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
@@ -77,10 +79,15 @@ class TechAdvisorController(
     @PostMapping("/chat", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun chat(
         @RequestParam(required = false) chatId: String?,
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody message: ChatRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val reply = chatService.processGeminiChat(sessionId, message.message)
+        val reply = chatService.processGeminiChat(
+            sessionId,
+            message.message,
+            usageContext(sessionId, "TECH_ADVISOR", clientPlatform),
+        )
         val contentItems = listOf(OpenAiCompatibleContentItem(type = "text", text = reply))
         return ResponseEntity.ok(contentItems)
     }
@@ -92,9 +99,22 @@ class TechAdvisorController(
     @PostMapping("/chat/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun chatStream(
         @RequestParam(required = false) chatId: String?,
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody message: ChatRequest,
     ): SseEmitter {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        return chatService.processGeminiChatStream(sessionId, message.message)
+        return chatService.processGeminiChatStream(
+            sessionId,
+            message.message,
+            usageContext(sessionId, "TECH_ADVISOR", clientPlatform),
+        )
     }
+
+    private fun usageContext(chatId: String, assistant: String, clientPlatform: String?) = TokenUsageContext(
+        userId = SecurityContextHolder.getContext().authentication?.name
+            ?: throw IllegalStateException("No authenticated user in SecurityContext"),
+        chatId = chatId,
+        assistant = assistant,
+        clientPlatform = clientPlatform?.trim()?.takeIf { it.isNotBlank() } ?: "unknown",
+    )
 }

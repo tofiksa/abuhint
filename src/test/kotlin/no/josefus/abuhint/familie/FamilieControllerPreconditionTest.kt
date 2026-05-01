@@ -10,6 +10,7 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
+import no.josefus.abuhint.service.TokenUsageContext
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -37,7 +38,7 @@ class FamilieControllerPreconditionTest {
         assertEquals(412, response.statusCode.value())
         val text = response.body!!.first().text
         assertTrue(text!!.contains("Google", ignoreCase = true))
-        verify(chatService, never()).processChat(any(), any(), any(), anyOrNull())
+        verify(chatService, never()).processChat(any(), any(), any(), anyOrNull(), any())
     }
 
     @Test
@@ -45,15 +46,27 @@ class FamilieControllerPreconditionTest {
         whenever(credentialStore.load("user-42")).thenReturn(
             GoogleCredentials("user-42", "rt", "at", null, "scope", "e@x", "UTC")
         )
-        whenever(chatService.processChat(any(), any(), any(), anyOrNull())).thenReturn("Klart!")
+        whenever(chatService.processChat(any(), any(), any(), anyOrNull(), any())).thenReturn("Klart!")
 
         val response = controller.sendMessage(
             chatId = "chat-1",
+            clientPlatform = "ios",
             request = FamilieMessageRequest("hei"),
         )
 
         assertEquals(200, response.statusCode.value())
         assertEquals("Klart!", response.body!!.first().text)
-        verify(chatService).processChat("chat-1", "hei", "user-42", null)
+        verify(chatService).processChat(
+            "chat-1",
+            "hei",
+            "user-42",
+            null,
+            TokenUsageContext(
+                userId = "user-42",
+                chatId = "chat-1",
+                assistant = "FAMILIE",
+                clientPlatform = "ios",
+            ),
+        )
     }
 }

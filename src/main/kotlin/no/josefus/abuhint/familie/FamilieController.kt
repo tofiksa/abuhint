@@ -11,7 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import no.josefus.abuhint.dto.ChatHistoryMessage
 import no.josefus.abuhint.dto.ChatHistoryResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
+import no.josefus.abuhint.controller.ChatController
 import no.josefus.abuhint.service.ChatMessageUtils
+import no.josefus.abuhint.service.TokenUsageContext
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -61,13 +64,20 @@ class FamilieController(
     @PostMapping(value = ["/send"], produces = [MediaType.APPLICATION_JSON_VALUE])
     fun sendMessage(
         @RequestParam(required = false) chatId: String?,
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody request: FamilieMessageRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val preconditionError = requireGoogleConnected()
         if (preconditionError != null) return preconditionError
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         val userId = currentUserId()
-        val reply = chatService.processChat(sessionId, request.message, userId, request.metadata)
+        val reply = chatService.processChat(
+            sessionId,
+            request.message,
+            userId,
+            request.metadata,
+            usageContext(userId, sessionId, clientPlatform),
+        )
         return ResponseEntity.ok(listOf(OpenAiCompatibleContentItem(type = "text", text = reply)))
     }
 
@@ -78,13 +88,20 @@ class FamilieController(
     @PostMapping(value = ["/stream"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun streamMessage(
         @RequestParam(required = false) chatId: String?,
+        @RequestHeader(value = ChatController.CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody request: FamilieMessageRequest,
     ): Any {
         val preconditionError = requireGoogleConnected()
         if (preconditionError != null) return preconditionError
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         val userId = currentUserId()
-        return chatService.processChatStream(sessionId, request.message, userId, request.metadata)
+        return chatService.processChatStream(
+            sessionId,
+            request.message,
+            userId,
+            request.metadata,
+            usageContext(userId, sessionId, clientPlatform),
+        )
     }
 
     @Operation(summary = "Hent samtalehistorikk for Familieplanleggern")
@@ -118,6 +135,13 @@ class FamilieController(
     private fun currentUserId(): String =
         SecurityContextHolder.getContext().authentication?.name
             ?: throw IllegalStateException("No authenticated user in SecurityContext")
+
+    private fun usageContext(userId: String, chatId: String, clientPlatform: String?) = TokenUsageContext(
+        userId = userId,
+        chatId = chatId,
+        assistant = "FAMILIE",
+        clientPlatform = clientPlatform?.trim()?.takeIf { it.isNotBlank() } ?: "unknown",
+    )
 
     /**
      * Guard: the Familieplanleggern chat endpoints are useless without a Google connection,
