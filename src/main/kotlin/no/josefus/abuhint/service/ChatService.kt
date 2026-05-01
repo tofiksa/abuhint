@@ -7,7 +7,6 @@ import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.service.TokenStream
 import dev.langchain4j.store.embedding.EmbeddingMatch
-import no.josefus.abuhint.service.Tokenizer
 import java.util.UUID
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.repository.LangChain4jAssistant
@@ -15,6 +14,7 @@ import no.josefus.abuhint.repository.TechAdvisorAssistant
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
 class ChatService(
@@ -52,16 +52,16 @@ class ChatService(
         throw lastException!!
     }
 
-    fun processChat(chatId: String, userMessage: String): String {
+    fun processChat(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): String {
         val dateTime = java.time.LocalDateTime.now().toString()
-        return processChatInternal(chatId, userMessage, openAiTokenizer, "openai") { effectiveChatId, message, uuid ->
+        return processChatInternal(chatId, userMessage, openAiTokenizer, "openai", usageContext) { effectiveChatId, message, uuid ->
             retryLlmCall { assistant.chat(effectiveChatId, message, uuid, dateTime) }
         }
     }
 
-    fun processGeminiChat(chatId: String, userMessage: String): String {
+    fun processGeminiChat(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): String {
         val dateTime = java.time.LocalDateTime.now().toString()
-        return processChatInternal(chatId, userMessage, geminiTokenizer, "gemini") { effectiveChatId, message, uuid ->
+        return processChatInternal(chatId, userMessage, geminiTokenizer, "gemini", usageContext) { effectiveChatId, message, uuid ->
             retryLlmCall { geminiAssistant.chat(effectiveChatId, message, uuid, dateTime) }
         }
     }
@@ -71,6 +71,7 @@ class ChatService(
         userMessage: String,
         tokenizer: Tokenizer,
         modelLabel: String,
+        usageContext: TokenUsageContext?,
         chatFn: (String, String, String) -> String
     ): String {
         val uuid = UUID.randomUUID().toString()
@@ -109,11 +110,16 @@ class ChatService(
         }
 
         val modelStart = System.nanoTime()
+        val effectiveUsageContext = usageContext?.copy(chatId = effectiveChatId)
         ChatIdContextHolder.set(effectiveChatId)
+        if (effectiveUsageContext != null) {
+            TokenUsageContextHolder.set(effectiveUsageContext)
+        }
         val response = try {
             chatFn(effectiveChatId, finalMessage, uuid)
         } finally {
             ChatIdContextHolder.clear()
+            TokenUsageContextHolder.clear()
         }
         val modelMs = (System.nanoTime() - modelStart) / 1_000_000
         log.info("LatMeasure: modelMs={} ({})", modelMs, modelLabel)
@@ -257,15 +263,15 @@ class ChatService(
         return concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
     }
 
-    fun processChatStream(chatId: String, userMessage: String): SseEmitter {
-        return streamFromAssistant(chatId, userMessage, openAiTokenizer) { effectiveChatId, enhancedMessage, uuid ->
+    fun processChatStream(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): SseEmitter {
+        return streamFromAssistant(chatId, userMessage, openAiTokenizer, usageContext) { effectiveChatId, enhancedMessage, uuid ->
             val dateTime = java.time.LocalDateTime.now().toString()
             assistant.chatStream(effectiveChatId, enhancedMessage, uuid)
         }
     }
 
-    fun processGeminiChatStream(chatId: String, userMessage: String): SseEmitter {
-        return streamFromAssistant(chatId, userMessage, geminiTokenizer) { effectiveChatId, enhancedMessage, uuid ->
+    fun processGeminiChatStream(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): SseEmitter {
+        return streamFromAssistant(chatId, userMessage, geminiTokenizer, usageContext) { effectiveChatId, enhancedMessage, uuid ->
             val dateTime = java.time.LocalDateTime.now().toString()
             geminiAssistant.chatStream(effectiveChatId, enhancedMessage, uuid, dateTime)
         }
@@ -275,6 +281,7 @@ class ChatService(
         chatId: String,
         userMessage: String,
         tokenizer: Tokenizer,
+        usageContext: TokenUsageContext?,
         streamFactory: (String, String, String) -> TokenStream
     ): SseEmitter {
         val emitter = SseEmitter(120_000L)
@@ -298,11 +305,24 @@ class ChatService(
             "$enhancedMessage\nUser: $userMessage"
         }
 
+        val effectiveUsageContext = usageContext?.copy(chatId = effectiveChatId)
+        val cleanedUp = AtomicBoolean(false)
+
+        fun cleanup() {
+            if (!cleanedUp.compareAndSet(false, true)) return
+            ChatIdContextHolder.clear()
+            TokenUsageContextHolder.clear()
+        }
+
         ChatIdContextHolder.set(effectiveChatId)
+        if (effectiveUsageContext != null) {
+            TokenUsageContextHolder.set(effectiveUsageContext)
+        }
         val tokenStream = try {
             streamFactory(effectiveChatId, finalMessage, uuid)
-        } finally {
-            ChatIdContextHolder.clear()
+        } catch (e: Exception) {
+            cleanup()
+            throw e
         }
         val fullResponse = StringBuilder()
 
@@ -321,6 +341,8 @@ class ChatService(
                     emitter.complete()
                 } catch (e: Exception) {
                     log.debug("Error completing SSE stream: ${e.message}")
+                } finally {
+                    cleanup()
                 }
             }
             .onError { error ->
@@ -330,12 +352,26 @@ class ChatService(
                     emitter.completeWithError(error)
                 } catch (e: Exception) {
                     log.debug("Error sending error event: ${e.message}")
+                } finally {
+                    cleanup()
                 }
             }
-            .start()
+        try {
+            tokenStream.start()
+        } catch (e: Exception) {
+            cleanup()
+            throw e
+        }
 
-        emitter.onTimeout { log.warn("SSE stream timed out for chatId=$effectiveChatId") }
-        emitter.onError { log.debug("SSE emitter error for chatId=$effectiveChatId: ${it.message}") }
+        emitter.onCompletion { cleanup() }
+        emitter.onTimeout {
+            log.warn("SSE stream timed out for chatId=$effectiveChatId")
+            cleanup()
+        }
+        emitter.onError {
+            log.debug("SSE emitter error for chatId=$effectiveChatId: ${it.message}")
+            cleanup()
+        }
 
         return emitter
     }

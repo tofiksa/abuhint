@@ -3,6 +3,8 @@ package no.josefus.abuhint.familie
 import dev.langchain4j.data.message.ChatMessage
 import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.service.ChatIdContextHolder
+import no.josefus.abuhint.service.TokenUsageContext
+import no.josefus.abuhint.service.TokenUsageContextHolder
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -26,10 +28,17 @@ class FamilieChatService(
 
     private val log = LoggerFactory.getLogger(FamilieChatService::class.java)
 
-    fun processChat(chatId: String, userMessage: String, userId: String, metadata: FamilieClientMetadata?): String {
+    fun processChat(
+        chatId: String,
+        userMessage: String,
+        userId: String,
+        metadata: FamilieClientMetadata?,
+        usageContext: TokenUsageContext,
+    ): String {
         val dateTime = buildDateTimeContext(metadata)
         FamilieUserChatRegistry.bind(chatId, userId)
         ChatIdContextHolder.set(chatId)
+        TokenUsageContextHolder.set(usageContext.copy(chatId = chatId, userId = userId))
         return try {
             assistant.chat(chatId, userMessage, dateTime)
         } catch (e: Exception) {
@@ -38,6 +47,7 @@ class FamilieChatService(
         } finally {
             FamilieUserChatRegistry.unbind(chatId)
             ChatIdContextHolder.clear()
+            TokenUsageContextHolder.clear()
         }
     }
 
@@ -46,18 +56,21 @@ class FamilieChatService(
         userMessage: String,
         userId: String,
         metadata: FamilieClientMetadata?,
+        usageContext: TokenUsageContext,
     ): SseEmitter {
         val emitter = SseEmitter(120_000L)
         val dateTime = buildDateTimeContext(metadata)
 
         FamilieUserChatRegistry.bind(chatId, userId)
         ChatIdContextHolder.set(chatId)
+        TokenUsageContextHolder.set(usageContext.copy(chatId = chatId, userId = userId))
         val cleanedUp = AtomicBoolean(false)
 
         fun cleanup() {
             if (!cleanedUp.compareAndSet(false, true)) return
             FamilieUserChatRegistry.unbind(chatId)
             ChatIdContextHolder.clear()
+            TokenUsageContextHolder.clear()
         }
 
         val tokenStream = try {

@@ -56,6 +56,48 @@ data class TokenUsageResponse(
     val modelName: String,
 )
 
+@Schema(description = "Tokenforbruk for én aggregert dimensjon")
+data class TokenUsageBreakdownResponse(
+    @field:Schema(description = "Samtale-ID")
+    val chatId: String,
+    @field:Schema(description = "Assistent/persona")
+    val assistant: String,
+    @field:Schema(description = "Klientplattform, f.eks. web, android eller ios")
+    val clientPlatform: String,
+    @field:Schema(description = "Modellnavn")
+    val modelName: String,
+    @field:Schema(description = "Totalt antall input-tokens")
+    val inputTokens: Long,
+    @field:Schema(description = "Antall cached input-tokens")
+    val cachedInputTokens: Long,
+    @field:Schema(description = "Totalt antall output-tokens")
+    val outputTokens: Long,
+    @field:Schema(description = "Sum av input + output tokens")
+    val totalTokens: Long,
+    @field:Schema(description = "Antall API-kall")
+    val requestCount: Int,
+    @field:Schema(description = "Sist oppdatert tidspunkt")
+    val updatedAt: String,
+)
+
+@Schema(description = "Tokenforbruk for innlogget bruker")
+data class TokenUsageSummaryResponse(
+    @field:Schema(description = "Innlogget bruker-ID")
+    val userId: String,
+    @field:Schema(description = "Totalt antall input-tokens")
+    val inputTokens: Long,
+    @field:Schema(description = "Antall cached input-tokens")
+    val cachedInputTokens: Long,
+    @field:Schema(description = "Totalt antall output-tokens")
+    val outputTokens: Long,
+    @field:Schema(description = "Sum av input + output tokens")
+    val totalTokens: Long,
+    @field:Schema(description = "Antall API-kall")
+    val requestCount: Int,
+    @field:Schema(description = "Breakdown per chat, assistant, platform og modell")
+    val breakdown: List<TokenUsageBreakdownResponse>,
+)
+
 @Schema(description = "Informasjon om et enkelt AI-verktøy")
 data class ToolInfo(
     @field:Schema(description = "Verktøyets unike navn", example = "searchWeb")

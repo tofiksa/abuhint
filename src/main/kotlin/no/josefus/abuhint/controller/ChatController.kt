@@ -14,11 +14,16 @@ import dev.langchain4j.data.message.UserMessage
 import no.josefus.abuhint.dto.ChatHistoryMessage
 import no.josefus.abuhint.dto.ChatHistoryResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
-import no.josefus.abuhint.dto.TokenUsageResponse
+import no.josefus.abuhint.dto.TokenUsageBreakdownResponse
+import no.josefus.abuhint.dto.TokenUsageSummaryResponse
 import no.josefus.abuhint.service.ChatService
+import no.josefus.abuhint.service.TokenUsageBreakdown
+import no.josefus.abuhint.service.TokenUsageContext
+import no.josefus.abuhint.service.TokenUsageSummary
 import no.josefus.abuhint.service.TokenUsageStore
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
@@ -30,6 +35,9 @@ class ChatController(
     private val chatService: ChatService,
     private val tokenUsageStore: TokenUsageStore,
 ) {
+    companion object {
+        const val CLIENT_PLATFORM_HEADER = "X-Client-Platform"
+    }
 
     @Operation(
         summary = "Send melding til Abu-hint",
@@ -88,10 +96,15 @@ class ChatController(
     fun sendMessage(
         @RequestParam(required = false) chatId: String?,
         @RequestParam(required = false) credentials: String?,
+        @RequestHeader(value = CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody message: MessageRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val reply = chatService.processChat(sessionId, message.message)
+        val reply = chatService.processChat(
+            sessionId,
+            message.message,
+            usageContext(sessionId, "ABUHINT", clientPlatform),
+        )
         val contentItems = listOf(OpenAiCompatibleContentItem(type = "text", text = reply))
         return ResponseEntity.ok(contentItems)
     }
@@ -103,10 +116,15 @@ class ChatController(
     @PostMapping(value = ["/stream"], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun streamMessage(
         @RequestParam(required = false) chatId: String?,
+        @RequestHeader(value = CLIENT_PLATFORM_HEADER, required = false) clientPlatform: String? = null,
         @RequestBody message: MessageRequest,
     ): SseEmitter {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        return chatService.processChatStream(sessionId, message.message)
+        return chatService.processChatStream(
+            sessionId,
+            message.message,
+            usageContext(sessionId, "ABUHINT", clientPlatform),
+        )
     }
 
     @Operation(
@@ -156,7 +174,7 @@ class ChatController(
                 description = "Tokenforbruk for samtalen",
                 content = [Content(
                     mediaType = MediaType.APPLICATION_JSON_VALUE,
-                    schema = Schema(implementation = TokenUsageResponse::class),
+                    schema = Schema(implementation = TokenUsageSummaryResponse::class),
                     examples = [ExampleObject(
                         name = "Eksempel",
                         value = """{"chatId":"3fa85f64-5717-4562-b3fc-2c963f66afa6","inputTokens":2048,"cachedInputTokens":1024,"outputTokens":512,"totalTokens":2560,"requestCount":3,"modelName":"configured-in-application-yml"}""",
@@ -167,9 +185,11 @@ class ChatController(
         ],
     )
     @GetMapping("/usage/{chatId}", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getTokenUsage(@PathVariable chatId: String): ResponseEntity<TokenUsageResponse> {
-        val usage = tokenUsageStore.getUsage(chatId)
-            ?: return ResponseEntity.notFound().build()
+    fun getTokenUsage(@PathVariable chatId: String): ResponseEntity<TokenUsageSummaryResponse> {
+        val usage = tokenUsageStore.getUsageForUserChat(currentUserId(), chatId)
+        if (usage.breakdown.isEmpty()) {
+            return ResponseEntity.notFound().build()
+        }
         return ResponseEntity.ok(usage.toResponse())
     }
 
@@ -182,26 +202,52 @@ class ChatController(
                 description = "Liste over tokenforbruk for alle samtaler",
                 content = [Content(
                     mediaType = MediaType.APPLICATION_JSON_VALUE,
-                    array = ArraySchema(schema = Schema(implementation = TokenUsageResponse::class)),
+                    schema = Schema(implementation = TokenUsageSummaryResponse::class),
                 )],
             ),
         ],
     )
     @GetMapping("/usage", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun getAllTokenUsage(): ResponseEntity<List<TokenUsageResponse>> {
-        val all = tokenUsageStore.getAllUsage().values.map { it.toResponse() }
-        return ResponseEntity.ok(all)
+    fun getAllTokenUsage(): ResponseEntity<TokenUsageSummaryResponse> {
+        val usage = tokenUsageStore.getUsageForUser(currentUserId())
+        return ResponseEntity.ok(usage.toResponse())
     }
 
-    private fun no.josefus.abuhint.service.TokenUsageRecord.toResponse() = TokenUsageResponse(
-        chatId = chatId,
-        inputTokens = inputTokens.get(),
-        cachedInputTokens = cachedInputTokens.get(),
-        outputTokens = outputTokens.get(),
-        totalTokens = inputTokens.get() + outputTokens.get(),
-        requestCount = requestCount.get(),
-        modelName = lastModelName,
+    private fun TokenUsageSummary.toResponse() = TokenUsageSummaryResponse(
+        userId = userId,
+        inputTokens = inputTokens,
+        cachedInputTokens = cachedInputTokens,
+        outputTokens = outputTokens,
+        totalTokens = totalTokens,
+        requestCount = requestCount,
+        breakdown = breakdown.map { it.toResponse() },
     )
+
+    private fun TokenUsageBreakdown.toResponse() = TokenUsageBreakdownResponse(
+        chatId = chatId,
+        assistant = assistant,
+        clientPlatform = clientPlatform,
+        modelName = modelName,
+        inputTokens = inputTokens,
+        cachedInputTokens = cachedInputTokens,
+        outputTokens = outputTokens,
+        totalTokens = totalTokens,
+        requestCount = requestCount,
+        updatedAt = updatedAt.toString(),
+    )
+
+    private fun usageContext(chatId: String, assistant: String, clientPlatform: String?) = TokenUsageContext(
+        userId = currentUserId(),
+        chatId = chatId,
+        assistant = assistant,
+        clientPlatform = clientPlatform.normalizedPlatform(),
+    )
+
+    private fun currentUserId(): String =
+        SecurityContextHolder.getContext().authentication?.name
+            ?: throw IllegalStateException("No authenticated user in SecurityContext")
+
+    private fun String?.normalizedPlatform(): String = this?.trim()?.takeIf { it.isNotBlank() } ?: "unknown"
 
     @Schema(description = "Forespørsel med brukerens melding")
     data class MessageRequest(

@@ -5,6 +5,7 @@ import no.josefus.abuhint.dto.OpenAiCompatibleChatCompletionResponse
 import no.josefus.abuhint.dto.OpenAiCompatibleChatMessage
 import no.josefus.abuhint.dto.OpenAiCompatibleChoice
 import no.josefus.abuhint.dto.OpenAiCompatibleContentItem
+import no.josefus.abuhint.dto.OpenAiCompatibleUsage
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -13,8 +14,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 class OpenAiCompatibleServiceImpl(
     private val chatService: ChatService,
     @Value("\${langchain4j.open-ai.chat-model.model-name}") private val modelName: String,
+    private val tokenUsageStore: TokenUsageStore,
 ) : OpenAiCompatibleService {
-    override fun createChatCompletion(request: OpenAiCompatibleChatCompletionRequest): OpenAiCompatibleChatCompletionResponse {
+    override fun createChatCompletion(
+        request: OpenAiCompatibleChatCompletionRequest,
+        userId: String,
+        clientPlatform: String,
+    ): OpenAiCompatibleChatCompletionResponse {
         if (request.messages.isEmpty()) {
             throw IllegalArgumentException("Messages cannot be empty")
         }
@@ -27,7 +33,18 @@ class OpenAiCompatibleServiceImpl(
             ?: throw IllegalArgumentException("No user message found in request")
 
         val chatId = request.chatId?.takeIf { it.isNotBlank() } ?: "openai-${System.currentTimeMillis()}"
-        val reply = chatService.processChat(chatId, userMessage)
+        val beforeUsage = tokenUsageStore.getUsageForUserChat(userId, chatId)
+        val reply = chatService.processChat(
+            chatId,
+            userMessage,
+            TokenUsageContext(
+                userId = userId,
+                chatId = chatId,
+                assistant = "OPENAI_COMPATIBLE",
+                clientPlatform = clientPlatform,
+            ),
+        )
+        val usage = usageDelta(beforeUsage, tokenUsageStore.getUsageForUserChat(userId, chatId))
 
         val responseMessage = OpenAiCompatibleChatMessage(
             role = "assistant",
@@ -43,18 +60,45 @@ class OpenAiCompatibleServiceImpl(
             created = System.currentTimeMillis() / 1000,
             model = modelName,
             choices = listOf(choice),
-            usage = null // You can fill this if you want token usage stats
+            usage = usage,
         )
     }
 
-    override fun createStreamingChatCompletion(request: OpenAiCompatibleChatCompletionRequest): SseEmitter {
+    override fun createStreamingChatCompletion(
+        request: OpenAiCompatibleChatCompletionRequest,
+        userId: String,
+        clientPlatform: String,
+    ): SseEmitter {
         if (request.messages.isEmpty()) {
             throw IllegalArgumentException("Messages cannot be empty")
         }
         val userMessage = request.messages.lastOrNull { it.role == "user" }?.content?.joinToString("\n") { it.text ?: "" }
             ?: throw IllegalArgumentException("No user message found in request")
         val chatId = request.chatId?.takeIf { it.isNotBlank() } ?: "openai-${System.currentTimeMillis()}"
-        return chatService.processChatStream(chatId, userMessage)
+        return chatService.processChatStream(
+            chatId,
+            userMessage,
+            TokenUsageContext(
+                userId = userId,
+                chatId = chatId,
+                assistant = "OPENAI_COMPATIBLE",
+                clientPlatform = clientPlatform,
+            ),
+        )
     }
+
+    private fun usageDelta(before: TokenUsageSummary, after: TokenUsageSummary): OpenAiCompatibleUsage? {
+        val promptTokens = (after.inputTokens - before.inputTokens).coerceAtLeast(0)
+        val completionTokens = (after.outputTokens - before.outputTokens).coerceAtLeast(0)
+        val totalTokens = promptTokens + completionTokens
+        if (totalTokens == 0L) return null
+        return OpenAiCompatibleUsage(
+            promptTokens = promptTokens.toSafeInt(),
+            completionTokens = completionTokens.toSafeInt(),
+            totalTokens = totalTokens.toSafeInt(),
+        )
+    }
+
+    private fun Long.toSafeInt(): Int = coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 }
 

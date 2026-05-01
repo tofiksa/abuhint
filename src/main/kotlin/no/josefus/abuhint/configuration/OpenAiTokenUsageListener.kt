@@ -7,6 +7,8 @@ import dev.langchain4j.model.chat.listener.ChatModelResponseContext
 import dev.langchain4j.model.openai.OpenAiTokenUsage
 import no.josefus.abuhint.service.ChatIdContextHolder
 import no.josefus.abuhint.service.TokenUsageEntry
+import no.josefus.abuhint.service.TokenUsageContext
+import no.josefus.abuhint.service.TokenUsageContextHolder
 import no.josefus.abuhint.service.TokenUsageStore
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -20,17 +22,24 @@ class OpenAiTokenUsageListener(
 
     companion object {
         private const val CHAT_ID_ATTR = "chatId"
+        private const val USAGE_CONTEXT_ATTR = "tokenUsageContext"
     }
 
     override fun onRequest(requestContext: ChatModelRequestContext) {
-        val chatId = ChatIdContextHolder.get()
+        val usageContext = TokenUsageContextHolder.get()
+        if (usageContext != null) {
+            requestContext.attributes()[USAGE_CONTEXT_ATTR] = usageContext
+        }
+
+        val chatId = usageContext?.chatId ?: ChatIdContextHolder.get()
         if (chatId != null) {
             requestContext.attributes()[CHAT_ID_ATTR] = chatId
         }
     }
 
     override fun onResponse(responseContext: ChatModelResponseContext) {
-        val chatId = responseContext.attributes()[CHAT_ID_ATTR] as? String
+        val usageContext = responseContext.attributes()[USAGE_CONTEXT_ATTR] as? TokenUsageContext
+        val chatId = usageContext?.chatId ?: responseContext.attributes()[CHAT_ID_ATTR] as? String
         if (chatId == null) {
             log.debug("No chatId in listener context; skipping token usage recording")
             return
@@ -47,16 +56,29 @@ class OpenAiTokenUsageListener(
             0
         }
 
-        tokenUsageStore.record(chatId, TokenUsageEntry(
+        val entry = TokenUsageEntry(
             inputTokens = inputTokens,
             cachedInputTokens = cachedTokens,
             outputTokens = outputTokens,
             modelName = modelName,
-        ))
+        )
+
+        if (usageContext != null) {
+            tokenUsageStore.record(usageContext, entry)
+        } else {
+            tokenUsageStore.record(chatId, entry)
+        }
 
         log.info(
-            "Token usage for chatId={}: input={} (cached={}) output={} model={}",
-            chatId, inputTokens, cachedTokens, outputTokens, modelName,
+            "Token usage for userId={} chatId={} assistant={} platform={}: input={} (cached={}) output={} model={}",
+            usageContext?.userId ?: "unknown",
+            chatId,
+            usageContext?.assistant ?: "unknown",
+            usageContext?.clientPlatform ?: "unknown",
+            inputTokens,
+            cachedTokens,
+            outputTokens,
+            modelName,
         )
     }
 
