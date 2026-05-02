@@ -82,7 +82,7 @@ class CoachAssistantController(
         @RequestBody message: ChatRequest,
     ): ResponseEntity<List<OpenAiCompatibleContentItem>> {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        val reply = chatService.processChat(
+        val reply = chatService.processCoachChat(
             sessionId,
             message.message,
             usageContext(sessionId, "COACH", clientPlatform),
@@ -102,7 +102,7 @@ class CoachAssistantController(
         @RequestBody message: ChatRequest,
     ): SseEmitter {
         val sessionId = chatId?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
-        return chatService.processChatStream(
+        return chatService.processCoachChatStream(
             sessionId,
             message.message,
             usageContext(sessionId, "COACH", clientPlatform),
