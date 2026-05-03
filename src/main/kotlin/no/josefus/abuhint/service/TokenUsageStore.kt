@@ -110,12 +110,18 @@ data class TokenUsageContext(
     val chatId: String,
     val assistant: String,
     val clientPlatform: String,
+    val taskId: String? = null,
+    val parentAgent: String? = null,
+    val workerAgent: String? = null,
 ) {
     fun normalized(): TokenUsageContext = copy(
         userId = userId.normalizedValue("unknown-user", 128),
         chatId = chatId.normalizedValue("unknown-chat", 128),
         assistant = assistant.normalizedValue("UNKNOWN", 64).uppercase(),
         clientPlatform = clientPlatform.normalizedValue("unknown", 64).lowercase(),
+        taskId = taskId?.trim()?.takeIf { it.isNotBlank() },
+        parentAgent = parentAgent?.trim()?.takeIf { it.isNotBlank() },
+        workerAgent = workerAgent?.trim()?.takeIf { it.isNotBlank() },
     )
 }
 

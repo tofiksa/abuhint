@@ -108,6 +108,7 @@
 			<artifactId>langchain4j-google-ai-gemini</artifactId>
 			<version>${langchain.version}</version>
 		</dependency>
+		<!-- Future: Embabel agent runtime — see secretary/DelegatedAgentRunner.kt (fun interface) for hook point. -->
 
 		<dependency>
 			<groupId>io.projectreactor</groupId>
