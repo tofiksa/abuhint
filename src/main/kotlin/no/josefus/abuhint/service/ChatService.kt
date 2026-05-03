@@ -1,30 +1,23 @@
 package no.josefus.abuhint.service
 
-import dev.langchain4j.data.message.AiMessage
-import dev.langchain4j.data.message.ChatMessage
-import dev.langchain4j.data.message.SystemMessage
-import dev.langchain4j.data.message.UserMessage
-import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.service.TokenStream
-import dev.langchain4j.store.embedding.EmbeddingMatch
-import java.util.UUID
-import no.josefus.abuhint.repository.ConcretePineconeChatMemoryStore
 import no.josefus.abuhint.repository.LangChain4jAssistant
 import no.josefus.abuhint.repository.TechAdvisorAssistant
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
 class ChatService(
     private val assistant: LangChain4jAssistant,
     private val geminiAssistant: TechAdvisorAssistant,
-    private val concretePineconeChatMemoryStore: ConcretePineconeChatMemoryStore,
+    private val memoryContextService: MemoryContextService,
     @Qualifier("openAiTokenizer")
     private val openAiTokenizer: Tokenizer,
     @Qualifier("geminiTokenizer")
-    private val geminiTokenizer: Tokenizer
+    private val geminiTokenizer: Tokenizer,
 ) {
 
     private val log = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
@@ -54,257 +47,75 @@ class ChatService(
 
     fun processChat(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): String {
         val dateTime = java.time.LocalDateTime.now().toString()
-        return processChatInternal(chatId, userMessage, openAiTokenizer, "openai", usageContext) { effectiveChatId, message, uuid ->
-            retryLlmCall { assistant.chat(effectiveChatId, message, uuid, dateTime) }
+        val effectiveChatId = memoryContextService.resolveChatId(chatId)
+        val uuid = UUID.randomUUID().toString()
+        val ctx = memoryContextService.buildFinalUserMessage(effectiveChatId, userMessage, openAiTokenizer)
+
+        return invokeModel(effectiveChatId, usageContext) {
+            retryLlmCall { assistant.chat(effectiveChatId, ctx.finalUserMessage, uuid, dateTime) }
         }
     }
 
     fun processGeminiChat(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): String {
         val dateTime = java.time.LocalDateTime.now().toString()
-        return processChatInternal(chatId, userMessage, geminiTokenizer, "gemini", usageContext) { effectiveChatId, message, uuid ->
-            retryLlmCall { geminiAssistant.chat(effectiveChatId, message, uuid, dateTime) }
+        val effectiveChatId = memoryContextService.resolveChatId(chatId)
+        val uuid = UUID.randomUUID().toString()
+        val ctx = memoryContextService.buildFinalUserMessage(effectiveChatId, userMessage, geminiTokenizer)
+
+        return invokeModel(effectiveChatId, usageContext) {
+            retryLlmCall { geminiAssistant.chat(effectiveChatId, ctx.finalUserMessage, uuid, dateTime) }
         }
     }
 
-    private fun processChatInternal(
-        chatId: String,
-        userMessage: String,
-        tokenizer: Tokenizer,
-        modelLabel: String,
+    private fun invokeModel(
+        effectiveChatId: String,
         usageContext: TokenUsageContext?,
-        chatFn: (String, String, String) -> String
+        block: () -> String,
     ): String {
-        val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 5000
-
-        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
-            log.warn("No chatId provided; generated session id $it to isolate conversation.")
-        }
-
-        val retrievalStart = System.nanoTime()
-        val relevantEmbeddingMatches = retrieveRelevantContext(effectiveChatId, userMessage, maxContextTokens, tokenizer)
-        val retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000
-
-        val relevantMessages = concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
-        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
-        log.info("LatMeasure: retrievalMs={} matches={}", retrievalMs, relevantMessages.size)
-
-        val enhancedMessage = formatMessagesToContext(summarizedMessages)
-        val totalTokensWithUser = tokenizer.estimateTokenCount(enhancedMessage) + tokenizer.estimateTokenCount(userMessage)
-        log.info("Total tokens in message (context + user): $totalTokensWithUser")
-
-        val contextMessages: Int
-        val contextTokens: Int
-        val finalMessage: String
-
-        if (totalTokensWithUser > maxContextTokens) {
-            val trimmedMessages = trimToTokenLimit(relevantMessages, userMessage, maxContextTokens, tokenizer)
-            val trimmedContext = formatMessagesToContext(trimmedMessages)
-            finalMessage = "$trimmedContext\nUser: $userMessage"
-            contextMessages = trimmedMessages.size
-            contextTokens = tokenizer.estimateTokenCount(trimmedContext)
-        } else {
-            finalMessage = "$enhancedMessage\nUser: $userMessage"
-            contextMessages = summarizedMessages.size
-            contextTokens = tokenizer.estimateTokenCount(enhancedMessage)
-        }
-
-        val modelStart = System.nanoTime()
         val effectiveUsageContext = usageContext?.copy(chatId = effectiveChatId)
         ChatIdContextHolder.set(effectiveChatId)
         if (effectiveUsageContext != null) {
             TokenUsageContextHolder.set(effectiveUsageContext)
         }
         val response = try {
-            chatFn(effectiveChatId, finalMessage, uuid)
+            block()
         } finally {
             ChatIdContextHolder.clear()
             TokenUsageContextHolder.clear()
         }
-        val modelMs = (System.nanoTime() - modelStart) / 1_000_000
-        log.info("LatMeasure: modelMs={} ({})", modelMs, modelLabel)
-
-        val postProcessed = postProcessReply(response)
-        logTelemetry(
-            model = modelLabel,
-            contextMessages = contextMessages,
-            contextTokens = contextTokens,
-            response = postProcessed,
-            retrievalMatches = relevantMessages.size
-        )
-        return postProcessed
+        return postProcessReply(response)
     }
 
-
-    private fun getMessageText(message: ChatMessage): String = ChatMessageUtils.getMessageText(message)
-
-    private fun formatMessagesToContext(messages: List<ChatMessage>): String {
-        if (messages.isEmpty()) return ""
-        val contextBuilder = StringBuilder()
-        contextBuilder.append("Context recap (most recent first). Use citation tags like [memory#1] when referring to these turns:\n")
-        messages.forEachIndexed { index, message ->
-            val text = getMessageText(message)
-            val recencyTag = "[memory#${index + 1}]"
-            when (message) {
-                is UserMessage -> contextBuilder.append("$recencyTag User: $text\n")
-                is AiMessage -> contextBuilder.append("$recencyTag Assistant: $text\n")
-                is SystemMessage -> contextBuilder.append("$recencyTag System: $text\n")
-            }
-        }
-        contextBuilder.append("End of recap.\nCurrent conversation:\n")
-        return contextBuilder.toString()
-    }
-
-    private fun postProcessReply(reply: String): String {
-        if (reply.isNullOrBlank()) {
-            log.error("Received null or blank reply from assistant")
-            return "I encountered an error processing your request. Please try again."
-        }
-        val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
-        val limit = 3900
-        if (normalized.length <= limit) return normalized
-        return truncateAtBoundary(normalized, limit)
-    }
-
-    private fun truncateAtBoundary(text: String, limit: Int): String {
-        // If inside a code block, find the start of the block and cut before it
-        val lastCodeFence = text.lastIndexOf("```", limit)
-        val codeBlocksBefore = text.substring(0, lastCodeFence.coerceAtLeast(0)).count("```")
-        if (lastCodeFence > 0 && codeBlocksBefore % 2 != 0) {
-            // We're inside an unclosed code block — truncate before it opened
-            val openFence = text.lastIndexOf("```", lastCodeFence - 1)
-            if (openFence > 0) {
-                return text.substring(0, openFence).trimEnd() + "\n\n..."
-            }
-        }
-
-        // Find nearest sentence boundary (. ! ? or newline) before the limit
-        val searchRegion = text.substring(0, limit)
-        val sentenceEnd = searchRegion.lastIndexOfAny(charArrayOf('.', '!', '?', '\n'))
-        return if (sentenceEnd > limit / 2) {
-            text.substring(0, sentenceEnd + 1).trimEnd() + "\n\n..."
-        } else {
-            text.take(limit).trimEnd() + " ..."
-        }
-    }
-
-    private fun String.count(sub: String): Int {
-        var count = 0
-        var idx = 0
-        while (true) {
-            idx = this.indexOf(sub, idx)
-            if (idx < 0) break
-            count++
-            idx += sub.length
-        }
-        return count
-    }
-
-    private fun logTelemetry(
-        model: String,
-        contextMessages: Int,
-        contextTokens: Int,
-        response: String,
-        retrievalMatches: Int
-    ) {
-        val responseChars = response.length
-        val responseTokens = (responseChars / 4).coerceAtLeast(1)
-        val recallRate = if (retrievalMatches > 0) 1.0 else 0.0
-        val hasFollowUpQuestion = response.contains('?')
-        log.info(
-            "Telemetry: model={} recallMatches={} recallRate={} contextMessages={} contextTokens={} responseChars={} responseTokens={} followUpQuestion={}",
-            model,
-            retrievalMatches,
-            recallRate,
-            contextMessages,
-            contextTokens,
-            responseChars,
-            responseTokens,
-            hasFollowUpQuestion
-        )
-    }
-
-    /**
-     * Summarize older messages if the list is long, keeping the most recent `keepRecent` messages
-     * verbatim and prepending a brief summary of older content.
-     */
-    private fun summarizeIfLong(
-        messages: List<ChatMessage>,
-        tokenizer: Tokenizer,
-        keepRecent: Int,
-        summaryCharLimit: Int
-    ): List<ChatMessage> {
-        if (messages.size <= keepRecent) return messages
-
-        val recent = messages.takeLast(keepRecent)
-        val older = messages.dropLast(keepRecent)
-        val summaryText = older.joinToString(" ") { getMessageText(it) }.take(summaryCharLimit)
-        val summary = SystemMessage("Summary of earlier conversation: $summaryText")
-        return listOf(summary) + recent
-    }
-
-
-    fun getChatHistory(chatId: String): List<ChatMessage> {
-        return concretePineconeChatMemoryStore.getMessages(chatId)
-    }
-
-    fun retrieveRelevantContext(
-        memoryId: String,
-        query: String,
-        maxTokens: Int,
-        tokenizer: Tokenizer
-    ): List<EmbeddingMatch<TextSegment>> {
-        val hasHistory = concretePineconeChatMemoryStore.hasStoredMessages(memoryId)
-        if (!hasHistory) {
-            val logger = org.slf4j.LoggerFactory.getLogger(ChatService::class.java)
-            logger.info("No stored messages for chatId=$memoryId; skipping retrieval to avoid cold-start latency")
-            return emptyList()
-        }
-        return concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
-    }
+    fun getChatHistory(chatId: String) =
+        memoryContextService.getChatHistory(chatId)
 
     fun processChatStream(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): SseEmitter {
-        return streamFromAssistant(chatId, userMessage, openAiTokenizer, usageContext) { effectiveChatId, enhancedMessage, uuid ->
+        val effectiveChatId = memoryContextService.resolveChatId(chatId)
+        val ctx = memoryContextService.buildFinalUserMessage(effectiveChatId, userMessage, openAiTokenizer)
+        val uuid = UUID.randomUUID().toString()
+        return streamFromAssistant(effectiveChatId, ctx.finalUserMessage, usageContext) {
             val dateTime = java.time.LocalDateTime.now().toString()
-            assistant.chatStream(effectiveChatId, enhancedMessage, uuid)
+            assistant.chatStream(effectiveChatId, it, uuid)
         }
     }
 
     fun processGeminiChatStream(chatId: String, userMessage: String, usageContext: TokenUsageContext? = null): SseEmitter {
-        return streamFromAssistant(chatId, userMessage, geminiTokenizer, usageContext) { effectiveChatId, enhancedMessage, uuid ->
+        val effectiveChatId = memoryContextService.resolveChatId(chatId)
+        val ctx = memoryContextService.buildFinalUserMessage(effectiveChatId, userMessage, geminiTokenizer)
+        val uuid = UUID.randomUUID().toString()
+        return streamFromAssistant(effectiveChatId, ctx.finalUserMessage, usageContext) {
             val dateTime = java.time.LocalDateTime.now().toString()
-            geminiAssistant.chatStream(effectiveChatId, enhancedMessage, uuid, dateTime)
+            geminiAssistant.chatStream(effectiveChatId, it, uuid, dateTime)
         }
     }
 
     private fun streamFromAssistant(
-        chatId: String,
-        userMessage: String,
-        tokenizer: Tokenizer,
+        effectiveChatId: String,
+        finalMessage: String,
         usageContext: TokenUsageContext?,
-        streamFactory: (String, String, String) -> TokenStream
+        streamFactory: (String) -> TokenStream,
     ): SseEmitter {
         val emitter = SseEmitter(120_000L)
-        val uuid = UUID.randomUUID().toString()
-        val maxContextTokens = 5000
-
-        val effectiveChatId = chatId.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString().also {
-            log.warn("No chatId provided; generated session id $it to isolate conversation.")
-        }
-
-        val relevantEmbeddingMatches = retrieveRelevantContext(effectiveChatId, userMessage, maxContextTokens, tokenizer)
-        val relevantMessages = concretePineconeChatMemoryStore.parseResultsToMessages(relevantEmbeddingMatches)
-        val summarizedMessages = summarizeIfLong(relevantMessages, tokenizer, 20, 800)
-        val enhancedMessage = formatMessagesToContext(summarizedMessages)
-
-        val totalTokens = tokenizer.estimateTokenCount(enhancedMessage) + tokenizer.estimateTokenCount(userMessage)
-        val finalMessage = if (totalTokens > maxContextTokens) {
-            val trimmedMessages = trimToTokenLimit(relevantMessages, userMessage, maxContextTokens, tokenizer)
-            "${formatMessagesToContext(trimmedMessages)}\nUser: $userMessage"
-        } else {
-            "$enhancedMessage\nUser: $userMessage"
-        }
-
         val effectiveUsageContext = usageContext?.copy(chatId = effectiveChatId)
         val cleanedUp = AtomicBoolean(false)
 
@@ -319,7 +130,7 @@ class ChatService(
             TokenUsageContextHolder.set(effectiveUsageContext)
         }
         val tokenStream = try {
-            streamFactory(effectiveChatId, finalMessage, uuid)
+            streamFactory(finalMessage)
         } catch (e: Exception) {
             cleanup()
             throw e
@@ -376,22 +187,44 @@ class ChatService(
         return emitter
     }
 
-    private fun trimToTokenLimit(
-        messages: List<ChatMessage>,
-        userMessage: String,
-        maxTokens: Int,
-        tokenizer: Tokenizer
-    ): List<ChatMessage> {
-        val trimmedMessages = mutableListOf<ChatMessage>()
-        var currentTokenCount = tokenizer.estimateTokenCount(userMessage)
-        for (message in messages) {
-            val messageTokens = tokenizer.estimateTokenCount(getMessageText(message))
-            if (currentTokenCount + messageTokens <= maxTokens) {
-                trimmedMessages.add(message)
-                currentTokenCount += messageTokens
-            } else break
+    private fun postProcessReply(reply: String): String {
+        if (reply.isNullOrBlank()) {
+            log.error("Received null or blank reply from assistant")
+            return "I encountered an error processing your request. Please try again."
         }
-        return trimmedMessages
+        val normalized = reply.trim().replace(Regex("\n{3,}"), "\n\n")
+        val limit = 3900
+        if (normalized.length <= limit) return normalized
+        return truncateAtBoundary(normalized, limit)
     }
 
+    private fun truncateAtBoundary(text: String, limit: Int): String {
+        val lastCodeFence = text.lastIndexOf("```", limit)
+        val codeBlocksBefore = text.substring(0, lastCodeFence.coerceAtLeast(0)).count("```")
+        if (lastCodeFence > 0 && codeBlocksBefore % 2 != 0) {
+            val openFence = text.lastIndexOf("```", lastCodeFence - 1)
+            if (openFence > 0) {
+                return text.substring(0, openFence).trimEnd() + "\n\n..."
+            }
+        }
+        val searchRegion = text.substring(0, limit)
+        val sentenceEnd = searchRegion.lastIndexOfAny(charArrayOf('.', '!', '?', '\n'))
+        return if (sentenceEnd > limit / 2) {
+            text.substring(0, sentenceEnd + 1).trimEnd() + "\n\n..."
+        } else {
+            text.take(limit).trimEnd() + " ..."
+        }
+    }
+
+    private fun String.count(sub: String): Int {
+        var count = 0
+        var idx = 0
+        while (true) {
+            idx = this.indexOf(sub, idx)
+            if (idx < 0) break
+            count++
+            idx += sub.length
+        }
+        return count
+    }
 }

@@ -11,8 +11,10 @@ import java.time.Instant
 @Service
 class SecretaryDelegationService(
     private val taskRepository: SecretaryTaskRepository,
+    private val executionRepository: TaskExecutionRepository,
     private val workerExecutionService: WorkerExecutionService,
     private val agentRegistry: AgentRegistry,
+    private val consentPolicyService: ConsentPolicyService,
     @Autowired(required = false) delegatedAgentRunners: List<DelegatedAgentRunner>?,
 ) {
 
@@ -28,6 +30,14 @@ class SecretaryDelegationService(
         val agentId = task.assignedAgentId
             ?: throw IllegalStateException("Task ${task.id} has no assignedAgentId")
         agentRegistry.require(agentId)
+
+        // Centralized consent-policy gate
+        if (!consentPolicyService.mayExecute(task)) {
+            task.status = SecretaryTaskStatus.waiting_for_confirmation
+            task.updatedAt = Instant.now()
+            return taskRepository.save(task)
+        }
+
         val brief = task.delegatedBrief?.trim()?.takeIf { it.isNotBlank() }
             ?: task.description?.trim()?.takeIf { it.isNotBlank() }
             ?: task.title
@@ -47,11 +57,24 @@ class SecretaryDelegationService(
             else -> SecretaryChatIds.workerMemoryId(task.id.toString())
         }
 
+        // Create execution record
+        val execution = TaskExecutionEntity(
+            taskId = task.id,
+            agentId = agentId,
+            userId = userId,
+            chatId = task.chatId,
+            brief = brief,
+            status = TaskExecutionStatus.running,
+        )
+        executionRepository.save(execution)
+        val startTime = System.nanoTime()
+
         return try {
             for (runner in optionalRunners) {
                 val out = runner.tryRun(agentId, task.id.toString(), brief, taskCtx)
                 if (out != null) {
                     finishSuccess(task, out)
+                    finishExecution(execution, out, null, startTime)
                     return taskRepository.save(task)
                 }
             }
@@ -69,12 +92,14 @@ class SecretaryDelegationService(
                 else -> throw IllegalArgumentException("Unhandled agent: $agentId")
             }
             finishSuccess(task, result)
+            finishExecution(execution, result, null, startTime)
             taskRepository.save(task)
         } catch (e: Exception) {
             log.error("Delegation failed for task {}: {}", task.id, e.message, e)
             task.status = SecretaryTaskStatus.failed
             task.errorMessage = e.message ?: "Unknown error"
             task.updatedAt = Instant.now()
+            finishExecution(execution, null, e.message, startTime)
             taskRepository.save(task)
         }
     }
@@ -84,5 +109,19 @@ class SecretaryDelegationService(
         task.resultSummary = summary.trim()
         task.errorMessage = null
         task.updatedAt = Instant.now()
+    }
+
+    private fun finishExecution(execution: TaskExecutionEntity, result: String?, error: String?, startTime: Long) {
+        val durationMs = (System.nanoTime() - startTime) / 1_000_000
+        execution.completedAt = Instant.now()
+        execution.durationMs = durationMs
+        if (error != null) {
+            execution.status = TaskExecutionStatus.failed
+            execution.errorMessage = error
+        } else {
+            execution.status = TaskExecutionStatus.done
+            execution.resultSummary = result?.take(4000)
+        }
+        executionRepository.save(execution)
     }
 }

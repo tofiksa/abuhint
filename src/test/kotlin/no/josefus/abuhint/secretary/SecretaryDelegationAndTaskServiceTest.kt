@@ -62,18 +62,25 @@ class SecretaryDelegationServiceTest {
     lateinit var taskRepository: SecretaryTaskRepository
 
     @Mock
+    lateinit var executionRepository: TaskExecutionRepository
+
+    @Mock
     lateinit var workerExecutionService: WorkerExecutionService
 
     private val agentRegistry = AgentRegistry()
+    private lateinit var consentPolicyService: ConsentPolicyService
 
     private lateinit var delegationService: SecretaryDelegationService
 
     @BeforeEach
     fun init() {
+        consentPolicyService = ConsentPolicyService(agentRegistry)
         delegationService = SecretaryDelegationService(
             taskRepository,
+            executionRepository,
             workerExecutionService,
             agentRegistry,
+            consentPolicyService,
             delegatedAgentRunners = null,
         )
     }
@@ -102,6 +109,7 @@ class SecretaryDelegationServiceTest {
         )
         whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result text")
         whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
 
         val base = TokenUsageContext(
             userId = "u1",
@@ -117,7 +125,9 @@ class SecretaryDelegationServiceTest {
             "Finn tre kilder",
             base.copy(taskId = id.toString(), workerAgent = "RESEARCH", parentAgent = "SECRETARY"),
         )
+        // task saved twice (running + done), execution saved twice (start + finish)
         verify(taskRepository, times(2)).save(any())
+        verify(executionRepository, times(2)).save(any())
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("result text", task.resultSummary)
     }

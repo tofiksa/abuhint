@@ -77,6 +77,9 @@ class MemoryContextService(
         return concretePineconeChatMemoryStore.retrieveFromPineconeWithTokenLimit(memoryId, query, maxTokens, tokenizer)
     }
 
+    fun getChatHistory(chatId: String): List<ChatMessage> =
+        concretePineconeChatMemoryStore.getMessages(chatId)
+
     private fun getMessageText(message: ChatMessage): String = ChatMessageUtils.getMessageText(message)
 
     private fun formatMessagesToContext(messages: List<ChatMessage>): String {
