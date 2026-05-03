@@ -159,3 +159,9 @@ resend:
         </table>
       </body>
     </html>
+
+abuhint:
+  delegation:
+    embabel-research-spike:
+      # When true, [EmbabelResearchSpikeRunner] runs first for agent `research` (stub until real Embabel wiring).
+      enabled: false
