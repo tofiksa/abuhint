@@ -85,7 +85,7 @@ class SecretaryTaskTool(
         return json.writeValueAsString(updated.toView())
     }
 
-    @Tool("Sett status ready (klar til delegasjon).")
+    @Tool("Sett status ready. Bruk kun som mellomsteg før delegateSecretaryTask i samme tur — ikke la oppgaven bli liggende på ready når brukeren venter på svar.")
     fun markSecretaryTaskReady(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String =
         updateSecretaryTask(memoryId, taskId, SecretaryTaskStatus.ready.name, null, null, null, null, null, null)
 
@@ -104,7 +104,7 @@ class SecretaryTaskTool(
         return json.writeValueAsString(t.toView())
     }
 
-    @Tool("Delegér oppgaven til valgt worker. Krev at assignedAgentId og delegatedBrief er satt.")
+    @Tool("Delegér oppgaven synkront til valgt worker. Krev at assignedAgentId og delegatedBrief er satt. Workeren kjører ferdig i dette kallet; bruk resultSummary i svaret til brukeren i samme tur.")
     fun delegateSecretaryTask(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String {
         val id = UUID.fromString(taskId)
         val ctx = usageOrThrow()
