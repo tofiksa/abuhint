@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.13</version>
+		<version>4.1.1</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>no.josefus</groupId>
@@ -15,10 +15,10 @@
 	<description>a chat application</description>
 
 	<properties>
-		<java.version>24</java.version>
+		<java.version>25</java.version>
 		<kotlin.version>2.3.20</kotlin.version>
-		<langchain.version>1.9.1</langchain.version>
-		<langchain.spring.version>1.9.1-beta17</langchain.spring.version>
+		<langchain.version>1.20.0</langchain.version>
+		<langchain.spring.version>1.20.0-beta30</langchain.spring.version>
 	</properties>
 
 	<dependencies>
@@ -54,6 +54,10 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-restclient</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 			<version>2.30.36</version>
@@ -83,15 +87,20 @@
 			<version>1.330</version>
 		</dependency>
 
-		<!-- LangChain4j dependencies -->
+		<!-- LangChain4j dependencies (Spring Boot 4 starters) -->
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
-			<artifactId>langchain4j-spring-boot-starter</artifactId>
+			<artifactId>langchain4j-spring-boot4-starter</artifactId>
 			<version>${langchain.spring.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
-			<artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+			<artifactId>langchain4j-open-ai-spring-boot4-starter</artifactId>
+			<version>${langchain.spring.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-http-client-spring-boot4-restclient</artifactId>
 			<version>${langchain.spring.version}</version>
 		</dependency>
 		<dependency>
@@ -102,7 +111,8 @@
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-core</artifactId>
-			<version>${langchain.version}</version> </dependency>
+			<version>${langchain.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-google-ai-gemini</artifactId>
@@ -148,16 +158,6 @@
 			<version>8.10.1</version>
 		</dependency>
 
-		<!-- Retry -->
-		<dependency>
-			<groupId>org.springframework.retry</groupId>
-			<artifactId>spring-retry</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-aop</artifactId>
-		</dependency>
-
 		<!-- Spring Security -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -190,6 +190,11 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.jetbrains.kotlin</groupId>
 			<artifactId>kotlin-test-junit5</artifactId>
 			<scope>test</scope>
@@ -217,11 +222,24 @@
 			<version>1.9.0</version>
 		</dependency>
 
-		<!-- OpenAPI / Swagger UI -->
+		<!-- OpenAPI / Swagger UI (3.x required for Spring Boot 4) -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>2.8.16</version>
+			<version>3.0.3</version>
+		</dependency>
+
+		<!-- Interim Jackson 2 support while app code still uses com.fasterxml.jackson -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-jackson2</artifactId>
+		</dependency>
+
+		<!-- Temporary: prints renamed/removed property diagnostics during Boot 4 migration -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-properties-migrator</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 
 		<!-- Spring Data JPA + DB drivers for Familieplanleggern credential store -->
@@ -240,8 +258,8 @@
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
@@ -292,7 +310,8 @@
 					<compilerPlugins>
 						<plugin>spring</plugin>
 						<plugin>jpa</plugin>
-					</compilerPlugins>
+                        <plugin>lombok</plugin>
+                    </compilerPlugins>
 				</configuration>
 				<dependencies>
 					<dependency>
@@ -305,7 +324,12 @@
 						<artifactId>kotlin-maven-noarg</artifactId>
 						<version>${kotlin.version}</version>
 					</dependency>
-				</dependencies>
+                    <dependency>
+                        <groupId>org.jetbrains.kotlin</groupId>
+                        <artifactId>kotlin-maven-lombok</artifactId>
+                        <version>${kotlin.version}</version>
+                    </dependency>
+                </dependencies>
 			</plugin>
 			<plugin>
 				<groupId>com.heroku.sdk</groupId>
