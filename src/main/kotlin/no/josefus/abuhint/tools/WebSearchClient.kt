@@ -1,7 +1,7 @@
 package no.josefus.abuhint.tools
 
 import org.slf4j.LoggerFactory
-import org.springframework.boot.web.client.RestTemplateBuilder
+import org.springframework.boot.restclient.RestTemplateBuilder
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -40,8 +40,8 @@ class WebSearchClient(
         properties: WebSearchProperties
     ) : this(
         restTemplateBuilder
-            .setConnectTimeout(Duration.ofMillis(properties.timeoutMs))
-            .setReadTimeout(Duration.ofMillis(properties.timeoutMs))
+            .connectTimeout(Duration.ofMillis(properties.timeoutMs))
+            .readTimeout(Duration.ofMillis(properties.timeoutMs))
             .build(),
         properties
     )
@@ -170,5 +170,5 @@ private data class TavilyResponse(
     val results: List<TavilyResult> = emptyList(),
     val answer: String? = null,
     val query: String? = null,
-    val cacheHit: Boolean = false
+    val cacheHit: Boolean? = null
 )
