@@ -5,8 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import dev.langchain4j.agent.tool.P
 import dev.langchain4j.agent.tool.Tool
 import dev.langchain4j.agent.tool.ToolMemoryId
-import no.josefus.abuhint.service.TokenUsageContextHolder
-import org.springframework.security.core.context.SecurityContextHolder
+import dev.langchain4j.invocation.InvocationParameters
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -17,14 +16,10 @@ class SecretaryTaskTool(
 
     private val json = jacksonObjectMapper().disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
 
-    private fun userId(): String =
-        SecurityContextHolder.getContext().authentication?.name?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Ingen autentisert bruker")
+    private fun userId(parameters: InvocationParameters): String =
+        SecretaryInvocationContext.require(parameters).userId
 
     private fun clientChatId(memoryId: String): String = SecretaryChatIds.clientChatIdFromMemory(memoryId)
-
-    private fun usageOrThrow() =
-        TokenUsageContextHolder.get() ?: throw IllegalStateException("Mangler TokenUsageContext (intern feil)")
 
     @Tool("List alle oppgaver for denne samtalen som JSON.")
     fun listSecretaryTasks(@ToolMemoryId memoryId: String): String {
@@ -39,6 +34,7 @@ class SecretaryTaskTool(
     @Tool("Opprett en ny oppgave. status settes til proposed. assignedAgentId er valgfritt (research|delivery|github|coach|tech|calendar).")
     fun createSecretaryTask(
         @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
         @P("Kort tittel") title: String,
         @P("Beskrivelse") description: String?,
         @P("Hvilken worker som skal utføre når du delegérer") assignedAgentId: String?,
@@ -46,7 +42,7 @@ class SecretaryTaskTool(
         @P("Akseptkriterier / forventet resultat") acceptanceCriteria: String?,
     ): String {
         val created = taskService.createTask(
-            userId = userId(),
+            userId = userId(parameters),
             clientChatId = clientChatId(memoryId),
             title = title,
             description = description,
@@ -60,6 +56,7 @@ class SecretaryTaskTool(
     @Tool("Oppdater en oppgave. taskId er UUID. status kan være proposed|blocked|ready|delegated|waiting_for_confirmation|running|done|failed.")
     fun updateSecretaryTask(
         @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
         @P("Task UUID") taskId: String,
         @P("Valgfri ny status") status: String?,
         @P("Valgfri ny tittel") title: String?,
@@ -73,7 +70,7 @@ class SecretaryTaskTool(
         val st = status?.let { parseStatus(it) }
         val updated = taskService.updateTask(
             taskId = id,
-            userId = userId(),
+            userId = userId(parameters),
             status = st,
             title = title,
             description = description,
@@ -86,36 +83,53 @@ class SecretaryTaskTool(
     }
 
     @Tool("Sett status ready. Bruk kun som mellomsteg før delegateSecretaryTask i samme tur — ikke la oppgaven bli liggende på ready når brukeren venter på svar.")
-    fun markSecretaryTaskReady(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String =
-        updateSecretaryTask(memoryId, taskId, SecretaryTaskStatus.ready.name, null, null, null, null, null, null)
+    fun markSecretaryTaskReady(
+        @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
+        @P("Task UUID") taskId: String,
+    ): String =
+        updateSecretaryTask(memoryId, parameters, taskId, SecretaryTaskStatus.ready.name, null, null, null, null, null, null)
 
     @Tool("Sett status blocked og beskriv årsak i beskrivelse ved behov.")
     fun markSecretaryTaskBlocked(
         @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
         @P("Task UUID") taskId: String,
         @P("Kort hvorfor blokkert") reason: String,
     ): String =
-        updateSecretaryTask(memoryId, taskId, SecretaryTaskStatus.blocked.name, null, reason, null, null, null, null)
+        updateSecretaryTask(memoryId, parameters, taskId, SecretaryTaskStatus.blocked.name, null, reason, null, null, null, null)
 
     @Tool("Marker oppgave som ferdig manuelt (uten worker).")
-    fun markSecretaryTaskDone(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String {
+    fun markSecretaryTaskDone(
+        @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
+        @P("Task UUID") taskId: String,
+    ): String {
         val id = UUID.fromString(taskId)
-        val t = taskService.markDone(id, userId())
+        val t = taskService.markDone(id, userId(parameters))
         return json.writeValueAsString(t.toView())
     }
 
     @Tool("Delegér oppgaven synkront til valgt worker. Krev at assignedAgentId og delegatedBrief er satt. Workeren kjører ferdig i dette kallet; bruk resultSummary i svaret til brukeren i samme tur.")
-    fun delegateSecretaryTask(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String {
+    fun delegateSecretaryTask(
+        @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
+        @P("Task UUID") taskId: String,
+    ): String {
         val id = UUID.fromString(taskId)
-        val ctx = usageOrThrow()
-        val delegated = taskService.delegateTask(id, userId(), ctx)
+        val ctx = SecretaryInvocationContext.require(parameters)
+        val delegated = taskService.delegateTask(id, ctx.userId, ctx)
         return json.writeValueAsString(delegated.toView())
     }
 
     @Tool("Hent én oppgave som JSON.")
-    fun getSecretaryTask(@ToolMemoryId memoryId: String, @P("Task UUID") taskId: String): String {
+    fun getSecretaryTask(
+        @ToolMemoryId memoryId: String,
+        parameters: InvocationParameters,
+        @P("Task UUID") taskId: String,
+    ): String {
         val id = UUID.fromString(taskId)
-        val t = taskService.getTask(id, userId()) ?: return """{"error":"not found"}"""
+        val t = taskService.getTask(id, userId(parameters)) ?: return """{"error":"not found"}"""
         return json.writeValueAsString(t.toView())
     }
 

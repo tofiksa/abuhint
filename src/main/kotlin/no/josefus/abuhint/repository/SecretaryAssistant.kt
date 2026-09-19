@@ -1,5 +1,6 @@
 package no.josefus.abuhint.repository
 
+import dev.langchain4j.invocation.InvocationParameters
 import dev.langchain4j.service.MemoryId
 import dev.langchain4j.service.SystemMessage
 import dev.langchain4j.service.TokenStream
@@ -45,6 +46,7 @@ interface SecretaryAssistant {
         @UserMessage userMessage: String,
         @V("uuid") uuid: String,
         @V("dateTime") dateTime: String,
+        parameters: InvocationParameters,
     ): String
 
     @SystemMessage(
@@ -66,5 +68,6 @@ interface SecretaryAssistant {
         @UserMessage userMessage: String,
         @V("uuid") uuid: String,
         @V("dateTime") dateTime: String,
+        parameters: InvocationParameters,
     ): TokenStream
 }
