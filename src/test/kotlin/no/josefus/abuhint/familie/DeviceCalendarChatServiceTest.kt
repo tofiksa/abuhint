@@ -84,5 +84,35 @@ class DeviceCalendarChatServiceTest {
         assertTrue(service.state("user", "chat").messages.isEmpty())
     }
 
+    @Test
+    fun `offset and local model dates become pending operations`() {
+        whenever(assistant.respond(any(), any())).thenReturn(
+            DeviceAgentDecision(
+                "Sjekker.",
+                DeviceCalendarAction(
+                    "read_events",
+                    "2026-09-24T00:00:00+02:00",
+                    "2026-09-25T00:00:00",
+                    "Europe/Oslo",
+                ),
+            ),
+        )
+        val reply = service.turn("user", "chat", DeviceTurnRequest("one", "Torsdag?"))
+        assertEquals("read_events", reply.pendingOperation?.action?.type)
+        assertEquals("2026-09-24T00:00:00+02:00", reply.pendingOperation?.action?.start)
+        assertEquals("2026-09-25T00:00:00", reply.pendingOperation?.action?.end)
+    }
+
+    @Test
+    fun `unparseable model dates become IllegalArgumentException not DateTimeParseException`() {
+        whenever(assistant.respond(any(), any())).thenReturn(
+            DeviceAgentDecision("Sjekker.", read().copy(start = "torsdag", end = "fredag")),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            service.turn("user", "chat", DeviceTurnRequest("one", "Avtaler?"))
+        }
+        assertTrue(service.state("user", "chat").messages.isEmpty())
+    }
+
     private fun read() = DeviceCalendarAction("read_events", "2026-09-24T00:00:00Z", "2026-09-25T00:00:00Z", "Europe/Oslo")
 }

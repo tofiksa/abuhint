@@ -16,7 +16,10 @@ import java.security.Principal
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeParseException
 import java.util.UUID
 
 data class DeviceCalendarAction(
@@ -157,16 +160,36 @@ class DeviceCalendarChatService(
 
     private fun validateAction(action: DeviceCalendarAction) {
         require(action.type in setOf("read_events", "create_event"))
-        val start = Instant.parse(action.start)
-        val end = Instant.parse(action.end)
+        require(!action.start.isNullOrBlank() && !action.end.isNullOrBlank())
+        val zone = try {
+            ZoneId.of(action.timezone)
+        } catch (e: java.time.DateTimeException) {
+            throw IllegalArgumentException("Invalid timezone: ${action.timezone}", e)
+        }
+        val start = parseInstant(action.start, zone)
+        val end = parseInstant(action.end, zone)
         require(end > start && Duration.between(start, end) <= Duration.ofDays(31))
-        ZoneId.of(action.timezone)
         if (action.type == "create_event") {
             require(!action.title.isNullOrBlank() && action.title.length <= 500)
             require((action.location?.length ?: 0) <= 500)
         }
         if (action.allDay) {
             require(start.epochSecond % 86400 == 0L && end.epochSecond % 86400 == 0L)
+        }
+    }
+
+    /** Accepts Instant (Z), offset ISO-8601, or local date-time in the action timezone. */
+    private fun parseInstant(value: String, zone: ZoneId): Instant = try {
+        OffsetDateTime.parse(value).toInstant()
+    } catch (_: DateTimeParseException) {
+        try {
+            Instant.parse(value)
+        } catch (_: DateTimeParseException) {
+            try {
+                LocalDateTime.parse(value).atZone(zone).toInstant()
+            } catch (e: DateTimeParseException) {
+                throw IllegalArgumentException("Invalid datetime: $value", e)
+            }
         }
     }
 }
