@@ -136,19 +136,4 @@ class SecretaryTaskTool(
     private fun parseStatus(raw: String): SecretaryTaskStatus =
         SecretaryTaskStatus.entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
             ?: throw IllegalArgumentException("Ugyldig status: $raw")
-
-    private fun SecretaryTaskEntity.toView() = mapOf(
-        "id" to id.toString(),
-        "chatId" to chatId,
-        "title" to title,
-        "description" to description,
-        "status" to status.name,
-        "assignedAgentId" to assignedAgentId,
-        "delegatedBrief" to delegatedBrief,
-        "resultSummary" to resultSummary,
-        "errorMessage" to errorMessage,
-        "requiresConfirmation" to requiresConfirmation,
-        "acceptanceCriteria" to acceptanceCriteria,
-        "sortOrder" to sortOrder,
-    )
 }

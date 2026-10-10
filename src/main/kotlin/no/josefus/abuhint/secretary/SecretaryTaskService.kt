@@ -25,6 +25,10 @@ class SecretaryTaskService(
         taskRepository.findAllByChatIdOrderBySortOrderAsc(clientChatId)
 
     @Transactional(readOnly = true)
+    fun listTasks(clientChatId: String, userId: String): List<SecretaryTaskEntity> =
+        taskRepository.findAllByChatIdAndUserIdOrderBySortOrderAsc(clientChatId, userId)
+
+    @Transactional(readOnly = true)
     fun getTask(taskId: UUID, userId: String): SecretaryTaskEntity? =
         taskRepository.findByIdAndUserId(taskId, userId)
 
