@@ -5,6 +5,7 @@ import no.josefus.abuhint.service.TokenUsageContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
@@ -75,38 +76,85 @@ class SecretaryTaskServiceTest {
     }
 
     @Test
-    fun `delegateTask does not launch another worker when task is already running`() {
-        val task = SecretaryTaskEntity(
-            userId = "u1",
-            chatId = "chat-a",
-            title = "Running task",
-            description = null,
-            status = SecretaryTaskStatus.running,
-            assignedAgentId = AgentRegistry.IDs.RESEARCH,
-            delegatedBrief = null,
-            resultSummary = null,
-            errorMessage = null,
-            acceptanceCriteria = null,
-            artifactsJson = null,
-        )
+    fun `delegateTask does not launch another worker when task is already claimed`() {
+        val task = serviceTask(SecretaryTaskStatus.running)
         whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenReturn(task)
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenReturn(0)
 
-        val outcome = service.delegateTask(
-            task.id,
-            "u1",
-            TokenUsageContext(
-                userId = "u1",
-                chatId = "chat-a",
-                assistant = "SECRETARY",
-                clientPlatform = "test",
-            ),
-        )
+        val outcome = service.delegateTask(task.id, "u1", serviceContext())
 
         assertTrue(outcome.backgrounded)
         assertEquals(SecretaryTaskStatus.running, outcome.task.status)
         verify(taskRepository, times(0)).save(any())
         verify(delegationService, times(0)).delegate(any(), any(), any())
     }
+
+    @Test
+    fun `concurrent delegateTask calls hand only one to the delegation service`() {
+        // Both callers read a stale `ready` entity; only the atomic claim decides who delegates.
+        val task = serviceTask(SecretaryTaskStatus.ready)
+        whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenAnswer { serviceTask(SecretaryTaskStatus.ready, task.id) }
+        val claims = AtomicInteger()
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenAnswer {
+            if (claims.getAndIncrement() == 0) 1 else 0
+        }
+        whenever(delegationService.delegate(any(), any(), any())).thenAnswer {
+            DelegationOutcome(it.arguments[0] as SecretaryTaskEntity, backgrounded = true)
+        }
+        val callers = Executors.newFixedThreadPool(2)
+        try {
+            val start = CountDownLatch(1)
+            val results = List(2) {
+                callers.submit<DelegationOutcome> {
+                    start.await()
+                    service.delegateTask(task.id, "u1", serviceContext())
+                }
+            }
+            start.countDown()
+            results.forEach { it.get(1, TimeUnit.SECONDS) }
+        } finally {
+            callers.shutdownNow()
+        }
+
+        verify(delegationService, times(1)).delegate(any(), any(), any())
+    }
+
+    @Test
+    fun `delegateTask releases claim as failed when delegation throws early`() {
+        val task = serviceTask(SecretaryTaskStatus.ready)
+        whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenReturn(task)
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenReturn(1)
+        whenever(delegationService.delegate(any(), any(), any())).thenThrow(IllegalStateException("boom"))
+        whenever(taskRepository.findById(task.id)).thenReturn(Optional.of(task))
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+
+        assertThrows<IllegalStateException> { service.delegateTask(task.id, "u1", serviceContext()) }
+
+        assertEquals(SecretaryTaskStatus.failed, task.status)
+        assertEquals("boom", task.errorMessage)
+    }
+
+    private fun serviceTask(status: SecretaryTaskStatus, id: UUID = UUID.randomUUID()) = SecretaryTaskEntity(
+        id = id,
+        userId = "u1",
+        chatId = "chat-a",
+        title = "Task",
+        description = null,
+        status = status,
+        assignedAgentId = AgentRegistry.IDs.RESEARCH,
+        delegatedBrief = null,
+        resultSummary = null,
+        errorMessage = null,
+        acceptanceCriteria = null,
+        artifactsJson = null,
+    )
+
+    private fun serviceContext() = TokenUsageContext(
+        userId = "u1",
+        chatId = "chat-a",
+        assistant = "SECRETARY",
+        clientPlatform = "test",
+    )
 }
 
 @ExtendWith(MockitoExtension::class)

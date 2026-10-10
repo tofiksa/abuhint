@@ -1,9 +1,9 @@
 package no.josefus.abuhint.secretary
 
 import org.slf4j.LoggerFactory
-import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.event.TransactionalEventListener
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
@@ -20,20 +20,38 @@ class SecretaryTaskEventHub {
 
     private val subscribersByChatId = ConcurrentHashMap<String, CopyOnWriteArraySet<Subscriber>>()
 
-    fun subscribe(chatId: String, userId: String, timeoutMs: Long): SseEmitter {
+    /**
+     * Registers a subscriber and sends [initialEvent] (e.g. a snapshot) before any live event can reach it.
+     * Sends to one emitter are serialized on its [Subscriber], so a live event published during subscribe
+     * waits until the initial event has been sent.
+     */
+    fun subscribe(chatId: String, userId: String, timeoutMs: Long, initialEvent: (() -> Any)? = null): SseEmitter {
         val emitter = SseEmitter(timeoutMs)
         val subscriber = Subscriber(userId, emitter)
-        subscribersByChatId.computeIfAbsent(chatId) { CopyOnWriteArraySet() }.add(subscriber)
 
         val remove = { removeSubscriber(chatId, subscriber) }
         emitter.onCompletion(remove)
         emitter.onTimeout(remove)
         emitter.onError { remove() }
 
+        synchronized(subscriber) {
+            subscribersByChatId.computeIfAbsent(chatId) { CopyOnWriteArraySet() }.add(subscriber)
+            if (initialEvent != null) {
+                try {
+                    emitter.send(taskEvent(initialEvent()))
+                } catch (e: Exception) {
+                    log.warn("Could not send initial SSE event chatId={}", chatId, e)
+                    removeSubscriber(chatId, subscriber)
+                    emitter.completeWithError(e)
+                }
+            }
+        }
+
         return emitter
     }
 
-    @EventListener
+    /** Delivered after commit when published inside a transaction, so clients that re-read see the same state. */
+    @TransactionalEventListener(fallbackExecution = true)
     fun on(event: SecretaryTaskEvent) {
         val subscribers = subscribersByChatId[event.chatId] ?: return
         for (subscriber in subscribers) {
@@ -41,11 +59,7 @@ class SecretaryTaskEventHub {
                 continue
             }
             try {
-                subscriber.emitter.send(
-                    SseEmitter.event()
-                        .name("task")
-                        .data(event),
-                )
+                synchronized(subscriber) { subscriber.emitter.send(taskEvent(event)) }
             } catch (e: Exception) {
                 log.debug("Removing SSE subscriber after send failure chatId={}", event.chatId)
                 removeSubscriber(event.chatId, subscriber)
@@ -58,7 +72,7 @@ class SecretaryTaskEventHub {
         for ((chatId, subscribers) in subscribersByChatId) {
             for (subscriber in subscribers) {
                 try {
-                    subscriber.emitter.send(SseEmitter.event().comment("ping"))
+                    synchronized(subscriber) { subscriber.emitter.send(SseEmitter.event().comment("ping")) }
                 } catch (e: Exception) {
                     log.debug("Removing SSE subscriber after heartbeat failure chatId={}", chatId)
                     removeSubscriber(chatId, subscriber)
@@ -66,6 +80,8 @@ class SecretaryTaskEventHub {
             }
         }
     }
+
+    private fun taskEvent(data: Any): SseEmitter.SseEventBuilder = SseEmitter.event().name("task").data(data)
 
     private fun removeSubscriber(chatId: String, subscriber: Subscriber) {
         subscribersByChatId[chatId]?.remove(subscriber)
