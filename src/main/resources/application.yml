@@ -1,6 +1,13 @@
 server:
   port: 8080
 
+abuhint:
+  secretary:
+    delegation:
+      sync-wait-ms: ${SECRETARY_SYNC_WAIT_MS:8000}
+      worker-timeout-ms: ${SECRETARY_WORKER_TIMEOUT_MS:180000}
+      max-concurrent: ${SECRETARY_MAX_CONCURRENT:8}
+
 spring:
   jwt:
     secret: ${JOSEFUS_JWT_SECRET}
