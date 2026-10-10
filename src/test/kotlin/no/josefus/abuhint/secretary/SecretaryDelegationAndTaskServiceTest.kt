@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.times
+import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.context.ApplicationEventPublisher
@@ -276,9 +277,22 @@ class SecretaryDelegationServiceTest {
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("slow result", task.resultSummary)
 
-        val events = argumentCaptor<SecretaryTaskEvent>()
-        verify(eventPublisher, times(2)).publishEvent(events.capture())
-        assertEquals(listOf("task.running", "task.done"), events.allValues.map { it.type })
+        val background = argumentCaptor<SecretaryTaskBackgroundCompletedEvent>()
+        verify(eventPublisher, timeout(1_000)).publishEvent(background.capture())
+        assertEquals(task.id, background.firstValue.taskId)
+        assertEquals(listOf("task.running", "task.done"), publishedTaskEventTypes())
+    }
+
+    @Test
+    fun `fast worker does not request a background follow-up`() {
+        val task = task()
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result")
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        stubRunningTransition(task)
+
+        delegationService.delegate(task, "u1", baseContext())
+
+        verify(eventPublisher, times(0)).publishEvent(any<SecretaryTaskBackgroundCompletedEvent>())
     }
 
     @Test
@@ -315,9 +329,8 @@ class SecretaryDelegationServiceTest {
         Thread.sleep(50)
         assertEquals(SecretaryTaskStatus.failed, task.status)
         assertNull(task.resultSummary)
-        val events = argumentCaptor<SecretaryTaskEvent>()
-        verify(eventPublisher, times(2)).publishEvent(events.capture())
-        assertEquals(listOf("task.running", "task.failed"), events.allValues.map { it.type })
+        verify(eventPublisher, timeout(1_000)).publishEvent(any<SecretaryTaskBackgroundCompletedEvent>())
+        assertEquals(listOf("task.running", "task.failed"), publishedTaskEventTypes())
     }
 
     @Test
@@ -443,6 +456,12 @@ class SecretaryDelegationServiceTest {
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
     )
+
+    private fun publishedTaskEventTypes(): List<String> {
+        val events = argumentCaptor<Any>()
+        verify(eventPublisher, org.mockito.kotlin.atLeastOnce()).publishEvent(events.capture())
+        return events.allValues.filterIsInstance<SecretaryTaskEvent>().map { it.type }
+    }
 
     private fun baseContext() = TokenUsageContext(
         userId = "u1",

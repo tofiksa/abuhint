@@ -2,18 +2,24 @@ package no.josefus.abuhint.secretary
 
 import java.time.Instant
 
+/** Anything pushed to a user's secretary SSE stream; routed by [chatId] + [userId]. */
+sealed interface SecretaryStreamEvent {
+    val chatId: String
+    val userId: String
+}
+
 data class SecretaryTaskEvent(
     val type: String,
     val taskId: String,
-    val chatId: String,
-    val userId: String,
+    override val chatId: String,
+    override val userId: String,
     val title: String,
     val status: String,
     val assignedAgentId: String?,
     val resultSummary: String?,
     val errorMessage: String?,
     val at: Instant = Instant.now(),
-) {
+) : SecretaryStreamEvent {
     companion object {
         fun from(type: String, entity: SecretaryTaskEntity): SecretaryTaskEvent =
             SecretaryTaskEvent(
@@ -29,3 +35,13 @@ data class SecretaryTaskEvent(
             )
     }
 }
+
+/** A secretary reply produced outside a chat turn (e.g. after a backgrounded task finished). */
+data class SecretaryAssistantMessageEvent(
+    val taskId: String,
+    override val chatId: String,
+    override val userId: String,
+    val text: String,
+    val type: String = "assistant.message",
+    val at: Instant = Instant.now(),
+) : SecretaryStreamEvent
