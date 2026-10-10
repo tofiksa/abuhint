@@ -4,6 +4,8 @@ import org.springframework.data.jpa.repository.JpaRepository
 import java.util.UUID
 
 interface TaskExecutionRepository : JpaRepository<TaskExecutionEntity, UUID> {
+    fun findAllByStatus(status: TaskExecutionStatus): List<TaskExecutionEntity>
+
     fun findAllByTaskIdOrderByStartedAtDesc(taskId: UUID): List<TaskExecutionEntity>
     fun findAllByUserIdOrderByStartedAtDesc(userId: String): List<TaskExecutionEntity>
 }

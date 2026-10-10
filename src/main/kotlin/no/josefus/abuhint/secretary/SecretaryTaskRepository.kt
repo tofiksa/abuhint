@@ -8,6 +8,8 @@ import java.time.Instant
 import java.util.UUID
 
 interface SecretaryTaskRepository : JpaRepository<SecretaryTaskEntity, UUID> {
+    fun findAllByStatusIn(status: Collection<SecretaryTaskStatus>): List<SecretaryTaskEntity>
+
     fun findAllByChatIdOrderBySortOrderAsc(chatId: String): List<SecretaryTaskEntity>
     fun findAllByChatIdAndUserIdOrderBySortOrderAsc(chatId: String, userId: String): List<SecretaryTaskEntity>
     fun findByIdAndUserId(id: UUID, userId: String): SecretaryTaskEntity?
