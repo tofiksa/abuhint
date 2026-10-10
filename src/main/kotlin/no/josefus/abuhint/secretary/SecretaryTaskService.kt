@@ -109,14 +109,14 @@ class SecretaryTaskService(
         return saved
     }
 
-    fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): SecretaryTaskEntity {
+    fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): DelegationOutcome {
         val task = taskRepository.findByIdAndUserId(taskId, userId)
             ?: throw IllegalArgumentException("Task not found")
         require(!task.assignedAgentId.isNullOrBlank()) { "assign agent before delegate" }
         task.status = SecretaryTaskStatus.delegated
         task.updatedAt = Instant.now()
         taskRepository.save(task)
-        return delegationService.delegate(task, userId, baseContext).task
+        return delegationService.delegate(task, userId, baseContext)
     }
 
     fun summarizeList(clientChatId: String): String {

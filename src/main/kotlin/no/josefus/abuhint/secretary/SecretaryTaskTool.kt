@@ -1,5 +1,6 @@
 package no.josefus.abuhint.secretary
 
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import dev.langchain4j.agent.tool.P
@@ -110,7 +111,7 @@ class SecretaryTaskTool(
         return json.writeValueAsString(t.toView())
     }
 
-    @Tool("Delegér oppgaven synkront til valgt worker. Krev at assignedAgentId og delegatedBrief er satt. Workeren kjører ferdig i dette kallet; bruk resultSummary i svaret til brukeren i samme tur.")
+    @Tool("Delegér oppgaven til valgt worker. Venter kort; returnerer enten status=done med resultSummary, eller status=running med backgrounded=true hvis workeren fortsatt jobber.")
     fun delegateSecretaryTask(
         @ToolMemoryId memoryId: String,
         parameters: InvocationParameters,
@@ -119,7 +120,9 @@ class SecretaryTaskTool(
         val id = UUID.fromString(taskId)
         val ctx = SecretaryInvocationContext.require(parameters)
         val delegated = taskService.delegateTask(id, ctx.userId, ctx)
-        return json.writeValueAsString(delegated.toView())
+        val response: ObjectNode = json.valueToTree(delegated.task.toView())
+        response.put("backgrounded", delegated.backgrounded)
+        return json.writeValueAsString(response)
     }
 
     @Tool("Hent én oppgave som JSON.")
