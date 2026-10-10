@@ -4,10 +4,11 @@ This guide is for agentic coding tools working in this repository.
 It summarizes build/test commands and local code style expectations.
 
 ## Project Snapshot
-- Stack: Kotlin 2.0.21, Java 21, Spring Boot 3.4.4, Maven wrapper.
+- Stack: Kotlin 2.3.20, Java 25, Spring Boot 4.1.1, Maven wrapper.
 - Source layout: `src/main/kotlin/no/josefus/abuhint`.
 - Tests: `src/test/kotlin/no/josefus/abuhint` (JUnit 5 + Mockito).
 - External services: OpenAI, Pinecone, Resend, GitHub, Tavily/Brave web search.
+- CI: GitHub Actions workflow `.github/workflows/maven.yml` runs `./mvnw clean test` and `./mvnw package` on JDK 25 (matches `Dockerfile`).
 
 ## Build, Run, and Test Commands
 Use the Maven wrapper (`./mvnw`) from repo root.
@@ -81,6 +82,7 @@ These are inferred from the codebase; keep changes consistent.
 - Keep tests deterministic; mock external services (`WebSearchClient`, GitHub API, etc.).
 
 ## Environment and Configuration
+- Requires **JDK 25** locally (same as Docker `eclipse-temurin:25` and CI); older JDKs cannot run test bytecode.
 - Sensitive values are provided via environment variables (see `README.md`).
 - Do not commit secrets or `.env` files.
 - `application.yml` (in `src/main/resources`) holds default app config; keep new properties in this file.

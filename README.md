@@ -3,7 +3,6 @@
 <img src="assets/Abu-hint-coach.png" alt="AbuHint Logo" width="400" />
 
 Welcome to **AbuHint**, a Kotlin-based Spring Boot application that combines the power of AI with seamless email communication. This project is designed to assist you with team coaching, sparring, and idea generation while integrating tools like LangChain4j and Resend for enhanced functionality.
-Welcome to **AbuHint**, a Kotlin-based Spring Boot application that combines the power of AI with seamless email communication. This project is designed to assist you with team coaching, sparring, and idea generation while integrating tools like LangChain4j and Resend for enhanced functionality.
 
 ---
 
@@ -28,9 +27,9 @@ Welcome to **AbuHint**, a Kotlin-based Spring Boot application that combines the
 
 ## 🏗️ Tech Stack
 
-- **Languages**: Kotlin 2.0.21, Java 21
-- **Framework**: Spring Boot 3.4.4
-- **AI Framework**: LangChain4j 1.9.1
+- **Languages**: Kotlin 2.3.20, Java 25
+- **Framework**: Spring Boot 4.1.1
+- **AI Framework**: LangChain4j 1.20.x
 - **Email Service**: Resend API 4.4.0
 - **Database**: H2 (in-memory)
 - **Document Processing**: Apache POI 5.5.1
