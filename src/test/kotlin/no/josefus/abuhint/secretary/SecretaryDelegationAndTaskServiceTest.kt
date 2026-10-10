@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -144,6 +145,85 @@ class SecretaryDelegationServiceTest {
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("result text", task.resultSummary)
     }
+
+    @Test
+    fun `delegation publishes running then done in order`() {
+        val task = task()
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result text")
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
+
+        delegationService.delegate(task, "u1", baseContext())
+
+        val events = argumentCaptor<SecretaryTaskEvent>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        assertEquals(listOf("task.running", "task.done"), events.allValues.map { it.type })
+    }
+
+    @Test
+    fun `delegation publishes failed event with error message on worker exception`() {
+        val task = task()
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any()))
+            .thenThrow(IllegalStateException("worker exploded"))
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
+
+        delegationService.delegate(task, "u1", baseContext())
+
+        val events = argumentCaptor<SecretaryTaskEvent>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        val failed = events.allValues.last()
+        assertEquals("task.failed", failed.type)
+        assertEquals("worker exploded", failed.errorMessage)
+    }
+
+    @Test
+    fun `delegation publishes needs confirmation at consent gate`() {
+        val task = task(
+            status = SecretaryTaskStatus.waiting_for_confirmation,
+            assignedAgentId = AgentRegistry.IDs.DELIVERY,
+            requiresConfirmation = true,
+        )
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+
+        delegationService.delegate(task, "u1", baseContext())
+
+        val event = argumentCaptor<SecretaryTaskEvent>()
+        verify(eventPublisher).publishEvent(event.capture())
+        assertEquals("task.needs_confirmation", event.firstValue.type)
+        assertEquals(SecretaryTaskStatus.waiting_for_confirmation.name, event.firstValue.status)
+    }
+
+    private fun task(
+        status: SecretaryTaskStatus = SecretaryTaskStatus.ready,
+        assignedAgentId: String = AgentRegistry.IDs.RESEARCH,
+        requiresConfirmation: Boolean = false,
+    ) = SecretaryTaskEntity(
+        id = UUID.randomUUID(),
+        userId = "u1",
+        chatId = "c1",
+        title = "Research",
+        description = null,
+        status = status,
+        assignedAgentId = assignedAgentId,
+        delegatedBrief = "Finn tre kilder",
+        resultSummary = null,
+        errorMessage = null,
+        requiresConfirmation = requiresConfirmation,
+        acceptanceCriteria = null,
+        sortOrder = 0,
+        listVersion = 0,
+        artifactsJson = null,
+        createdAt = Instant.now(),
+        updatedAt = Instant.now(),
+    )
+
+    private fun baseContext() = TokenUsageContext(
+        userId = "u1",
+        chatId = "c1",
+        assistant = "SECRETARY",
+        clientPlatform = "test",
+    )
 }
 
 private object NoopPlatformTransactionManager : PlatformTransactionManager {

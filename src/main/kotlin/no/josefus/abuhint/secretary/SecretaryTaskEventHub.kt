@@ -5,7 +5,6 @@ import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -47,7 +46,7 @@ class SecretaryTaskEventHub {
                         .name("task")
                         .data(event),
                 )
-            } catch (e: IOException) {
+            } catch (e: Exception) {
                 log.debug("Removing SSE subscriber after send failure chatId={}", event.chatId)
                 removeSubscriber(event.chatId, subscriber)
             }
@@ -60,7 +59,7 @@ class SecretaryTaskEventHub {
             for (subscriber in subscribers) {
                 try {
                     subscriber.emitter.send(SseEmitter.event().comment("ping"))
-                } catch (e: IOException) {
+                } catch (e: Exception) {
                     log.debug("Removing SSE subscriber after heartbeat failure chatId={}", chatId)
                     removeSubscriber(chatId, subscriber)
                 }

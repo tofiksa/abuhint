@@ -3,10 +3,12 @@ package no.josefus.abuhint.controller
 import no.josefus.abuhint.secretary.SecretaryTaskEntity
 import no.josefus.abuhint.secretary.SecretaryTaskEventHub
 import no.josefus.abuhint.secretary.SecretaryTaskService
+import no.josefus.abuhint.secretary.SecretaryTaskSnapshot
 import no.josefus.abuhint.secretary.SecretaryTaskStatus
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -14,6 +16,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class SecretaryTaskControllerTest {
 
@@ -47,7 +50,14 @@ class SecretaryTaskControllerTest {
         controller.taskEvents("chat-a")
 
         verify(eventHub).subscribe("chat-a", "user-a", 1_800_000L)
-        verify(emitter).send(any<SseEmitter.SseEventBuilder>())
+        val event = argumentCaptor<SseEmitter.SseEventBuilder>()
+        verify(emitter).send(event.capture())
+        val snapshot = event.firstValue.build()
+            .map { it.data }
+            .filterIsInstance<SecretaryTaskSnapshot>()
+            .single()
+        assertIs<SecretaryTaskSnapshot>(snapshot)
+        assertEquals(listOf("Task"), snapshot.tasks.map { it.title })
     }
 
     private fun authenticate(userId: String) {
