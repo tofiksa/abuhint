@@ -112,6 +112,9 @@ class SecretaryTaskService(
     fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): DelegationOutcome {
         val task = taskRepository.findByIdAndUserId(taskId, userId)
             ?: throw IllegalArgumentException("Task not found")
+        if (task.status == SecretaryTaskStatus.running) {
+            return DelegationOutcome(task, backgrounded = true)
+        }
         require(!task.assignedAgentId.isNullOrBlank()) { "assign agent before delegate" }
         task.status = SecretaryTaskStatus.delegated
         task.updatedAt = Instant.now()

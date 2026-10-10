@@ -74,8 +74,8 @@ class SecretaryTaskController(
     @GetMapping("/events", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun taskEvents(@RequestParam chatId: String): SseEmitter {
         val userId = authenticatedUserId()
-        val tasks = taskService.listTasks(chatId, userId).map { it.toView() }
         val emitter = eventHub.subscribe(chatId, userId, TASK_EVENT_TIMEOUT_MS)
+        val tasks = taskService.listTasks(chatId, userId).map { it.toView() }
         try {
             emitter.send(
                 SseEmitter.event()

@@ -73,6 +73,40 @@ class SecretaryTaskServiceTest {
         assertEquals(AgentRegistry.IDs.RESEARCH, saved.assignedAgentId)
         assertEquals("chat-a", saved.chatId)
     }
+
+    @Test
+    fun `delegateTask does not launch another worker when task is already running`() {
+        val task = SecretaryTaskEntity(
+            userId = "u1",
+            chatId = "chat-a",
+            title = "Running task",
+            description = null,
+            status = SecretaryTaskStatus.running,
+            assignedAgentId = AgentRegistry.IDs.RESEARCH,
+            delegatedBrief = null,
+            resultSummary = null,
+            errorMessage = null,
+            acceptanceCriteria = null,
+            artifactsJson = null,
+        )
+        whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenReturn(task)
+
+        val outcome = service.delegateTask(
+            task.id,
+            "u1",
+            TokenUsageContext(
+                userId = "u1",
+                chatId = "chat-a",
+                assistant = "SECRETARY",
+                clientPlatform = "test",
+            ),
+        )
+
+        assertTrue(outcome.backgrounded)
+        assertEquals(SecretaryTaskStatus.running, outcome.task.status)
+        verify(taskRepository, times(0)).save(any())
+        verify(delegationService, times(0)).delegate(any(), any(), any())
+    }
 }
 
 @ExtendWith(MockitoExtension::class)

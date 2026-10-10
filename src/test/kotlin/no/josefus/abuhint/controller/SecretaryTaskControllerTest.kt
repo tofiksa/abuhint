@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -50,6 +51,11 @@ class SecretaryTaskControllerTest {
         controller.taskEvents("chat-a")
 
         verify(eventHub).subscribe("chat-a", "user-a", 1_800_000L)
+        inOrder(eventHub, taskService, emitter) {
+            verify(eventHub).subscribe("chat-a", "user-a", 1_800_000L)
+            verify(taskService).listTasks("chat-a", "user-a")
+            verify(emitter).send(any<SseEmitter.SseEventBuilder>())
+        }
         val event = argumentCaptor<SseEmitter.SseEventBuilder>()
         verify(emitter).send(event.capture())
         val snapshot = event.firstValue.build()
