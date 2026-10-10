@@ -5,7 +5,8 @@ import no.josefus.abuhint.service.TokenUsageContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 
 @Service
@@ -15,13 +16,14 @@ class SecretaryDelegationService(
     private val workerExecutionService: WorkerExecutionService,
     private val agentRegistry: AgentRegistry,
     private val consentPolicyService: ConsentPolicyService,
+    platformTransactionManager: PlatformTransactionManager,
     @Autowired(required = false) delegatedAgentRunners: List<DelegatedAgentRunner>?,
 ) {
 
     private val log = LoggerFactory.getLogger(SecretaryDelegationService::class.java)
     private val optionalRunners: List<DelegatedAgentRunner> = delegatedAgentRunners.orEmpty()
+    private val transactionTemplate = TransactionTemplate(platformTransactionManager)
 
-    @Transactional
     fun delegate(
         task: SecretaryTaskEntity,
         userId: String,
@@ -41,10 +43,6 @@ class SecretaryDelegationService(
         val brief = task.delegatedBrief?.trim()?.takeIf { it.isNotBlank() }
             ?: task.description?.trim()?.takeIf { it.isNotBlank() }
             ?: task.title
-
-        task.status = SecretaryTaskStatus.running
-        task.updatedAt = Instant.now()
-        taskRepository.save(task)
 
         val taskCtx = baseContext.copy(
             taskId = task.id.toString(),
@@ -66,16 +64,14 @@ class SecretaryDelegationService(
             brief = brief,
             status = TaskExecutionStatus.running,
         )
-        executionRepository.save(execution)
+        persistRunningStart(task, execution)
         val startTime = System.nanoTime()
 
         return try {
             for (runner in optionalRunners) {
                 val out = runner.tryRun(agentId, task.id.toString(), brief, taskCtx)
                 if (out != null) {
-                    finishSuccess(task, out)
-                    finishExecution(execution, out, null, startTime)
-                    return taskRepository.save(task)
+                    return persistCompletion(task, execution, startTime, out, null)
                 }
             }
 
@@ -91,18 +87,46 @@ class SecretaryDelegationService(
                 -> workerExecutionService.runOpenAiWorker(agentId, workerMemoryId, brief, taskCtx)
                 else -> throw IllegalArgumentException("Unhandled agent: $agentId")
             }
-            finishSuccess(task, result)
-            finishExecution(execution, result, null, startTime)
-            taskRepository.save(task)
+            persistCompletion(task, execution, startTime, result, null)
         } catch (e: Exception) {
             log.error("Delegation failed for task {}: {}", task.id, e.message, e)
-            task.status = SecretaryTaskStatus.failed
-            task.errorMessage = e.message ?: "Unknown error"
-            task.updatedAt = Instant.now()
-            finishExecution(execution, null, e.message, startTime)
-            taskRepository.save(task)
+            persistCompletion(
+                task,
+                execution,
+                startTime,
+                null,
+                e.message ?: "Unknown error",
+            )
         }
     }
+
+    private fun persistRunningStart(task: SecretaryTaskEntity, execution: TaskExecutionEntity) {
+        transactionTemplate.executeWithoutResult {
+            task.status = SecretaryTaskStatus.running
+            task.updatedAt = Instant.now()
+            taskRepository.save(task)
+            executionRepository.save(execution)
+        }
+    }
+
+    private fun persistCompletion(
+        task: SecretaryTaskEntity,
+        execution: TaskExecutionEntity,
+        startTime: Long,
+        result: String?,
+        error: String?,
+    ): SecretaryTaskEntity =
+        transactionTemplate.execute {
+            if (error != null) {
+                task.status = SecretaryTaskStatus.failed
+                task.errorMessage = error
+                task.updatedAt = Instant.now()
+            } else {
+                finishSuccess(task, result!!)
+            }
+            finishExecution(execution, result, error, startTime)
+            taskRepository.save(task)
+        }!!
 
     private fun finishSuccess(task: SecretaryTaskEntity, summary: String) {
         task.status = SecretaryTaskStatus.done

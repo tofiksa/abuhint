@@ -11,6 +11,10 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.SimpleTransactionStatus
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -81,6 +85,7 @@ class SecretaryDelegationServiceTest {
             workerExecutionService,
             agentRegistry,
             consentPolicyService,
+            platformTransactionManager = NoopPlatformTransactionManager,
             delegatedAgentRunners = null,
         )
     }
@@ -131,4 +136,12 @@ class SecretaryDelegationServiceTest {
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("result text", task.resultSummary)
     }
+}
+
+private object NoopPlatformTransactionManager : PlatformTransactionManager {
+    override fun getTransaction(definition: TransactionDefinition?): TransactionStatus = SimpleTransactionStatus()
+
+    override fun commit(status: TransactionStatus) {}
+
+    override fun rollback(status: TransactionStatus) {}
 }

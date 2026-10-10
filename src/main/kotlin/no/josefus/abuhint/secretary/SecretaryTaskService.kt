@@ -93,7 +93,6 @@ class SecretaryTaskService(
         return taskRepository.save(task)
     }
 
-    @Transactional
     fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): SecretaryTaskEntity {
         val task = taskRepository.findByIdAndUserId(taskId, userId)
             ?: throw IllegalArgumentException("Task not found")

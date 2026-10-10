@@ -35,3 +35,6 @@ build/
 .vscode/
 .cursor/
 CLAUDE.md
+
+### Git worktrees ###
+.worktrees/
