@@ -52,14 +52,14 @@ class SecretaryTaskEventHub {
 
     /** Delivered after commit when published inside a transaction, so clients that re-read see the same state. */
     @TransactionalEventListener(fallbackExecution = true)
-    fun on(event: SecretaryTaskEvent) {
+    fun on(event: SecretaryStreamEvent) {
         val subscribers = subscribersByChatId[event.chatId] ?: return
         for (subscriber in subscribers) {
             if (subscriber.userId != event.userId) {
                 continue
             }
             try {
-                synchronized(subscriber) { subscriber.emitter.send(taskEvent(event)) }
+                synchronized(subscriber) { subscriber.emitter.send(streamEvent(event)) }
             } catch (e: Exception) {
                 log.debug("Removing SSE subscriber after send failure chatId={}", event.chatId)
                 removeSubscriber(event.chatId, subscriber)
@@ -82,6 +82,11 @@ class SecretaryTaskEventHub {
     }
 
     private fun taskEvent(data: Any): SseEmitter.SseEventBuilder = SseEmitter.event().name("task").data(data)
+
+    private fun streamEvent(event: SecretaryStreamEvent): SseEmitter.SseEventBuilder = when (event) {
+        is SecretaryTaskEvent -> taskEvent(event)
+        is SecretaryAssistantMessageEvent -> SseEmitter.event().name("assistant").data(event)
+    }
 
     private fun removeSubscriber(chatId: String, subscriber: Subscriber) {
         subscribersByChatId[chatId]?.remove(subscriber)

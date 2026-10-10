@@ -67,6 +67,12 @@ class SecretaryDelegationService(
             future.get(properties.syncWaitMs, MILLISECONDS)
             DelegationOutcome(reloadTask(task.id))
         } catch (_: TimeoutException) {
+            // The secretary already answered with a short acknowledgement; let it deliver the result itself.
+            // Async so a follow-up LLM call never runs on CompletableFuture's timeout scheduler thread.
+            future.whenCompleteAsync(
+                { _, _ -> eventPublisher.publishEvent(SecretaryTaskBackgroundCompletedEvent(task.id, baseContext)) },
+                secretaryWorkerExecutor,
+            )
             DelegationOutcome(reloadTask(task.id), backgrounded = true)
         } catch (e: ExecutionException) {
             val fresh = reloadTask(task.id)
