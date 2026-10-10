@@ -2,6 +2,7 @@ package no.josefus.abuhint.secretary
 
 import no.josefus.abuhint.agent.AgentRegistry
 import no.josefus.abuhint.service.TokenUsageContext
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -20,7 +21,16 @@ import org.springframework.transaction.support.SimpleTransactionStatus
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @ExtendWith(MockitoExtension::class)
 class SecretaryTaskServiceTest {
@@ -85,26 +95,24 @@ class SecretaryDelegationServiceTest {
 
     private lateinit var delegationService: SecretaryDelegationService
     private var execution: TaskExecutionEntity? = null
+    private val executors = mutableListOf<ExecutorService>()
 
     @BeforeEach
     fun init() {
         consentPolicyService = ConsentPolicyService(agentRegistry)
-        delegationService = SecretaryDelegationService(
-            taskRepository,
-            executionRepository,
-            workerExecutionService,
-            agentRegistry,
-            consentPolicyService,
-            eventPublisher,
+        delegationService = service(
             properties = SecretaryDelegationProperties(),
-            secretaryWorkerExecutor = { command -> command.run() },
-            platformTransactionManager = NoopPlatformTransactionManager,
-            delegatedAgentRunners = null,
+            executor = Executor { command -> command.run() },
         )
     }
 
+    @AfterEach
+    fun shutDownExecutors() {
+        executors.forEach { it.shutdownNow() }
+    }
+
     @Test
-    fun `delegation calls research worker and marks done`() {
+    fun `fast worker returns done with result without backgrounding`() {
         val id = UUID.randomUUID()
         val task = SecretaryTaskEntity(
             id = id,
@@ -135,7 +143,7 @@ class SecretaryDelegationServiceTest {
             assistant = "SECRETARY",
             clientPlatform = "test",
         )
-        delegationService.delegate(task, "u1", base)
+        val outcome = delegationService.delegate(task, "u1", base)
 
         verify(workerExecutionService).runOpenAiWorker(
             AgentRegistry.IDs.RESEARCH,
@@ -146,8 +154,140 @@ class SecretaryDelegationServiceTest {
         // The running transition is an atomic update; completion saves the task entity.
         verify(taskRepository).save(any())
         verify(executionRepository, times(2)).save(any())
+        assertFalse(outcome.backgrounded)
+        assertEquals(SecretaryTaskStatus.done, outcome.task.status)
+        assertEquals("result text", outcome.task.resultSummary)
+    }
+
+    @Test
+    fun `slow worker returns running then publishes done when completed`() {
+        val task = task()
+        val workerStarted = CountDownLatch(1)
+        val releaseWorker = CountDownLatch(1)
+        val donePublished = CountDownLatch(1)
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenAnswer {
+            workerStarted.countDown()
+            assertTrue(releaseWorker.await(1, TimeUnit.SECONDS))
+            "slow result"
+        }
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(eventPublisher.publishEvent(any<SecretaryTaskEvent>())).thenAnswer {
+            if ((it.arguments[0] as SecretaryTaskEvent).type == "task.done") {
+                donePublished.countDown()
+            }
+            Unit
+        }
+        stubRunningTransition(task)
+        delegationService = service(
+            properties = SecretaryDelegationProperties(syncWaitMs = 10, workerTimeoutMs = 1_000),
+            executor = asyncExecutor(),
+        )
+
+        val outcome = delegationService.delegate(task, "u1", baseContext())
+
+        assertTrue(workerStarted.await(1, TimeUnit.SECONDS))
+        assertTrue(outcome.backgrounded)
+        assertEquals(SecretaryTaskStatus.running, outcome.task.status)
+
+        releaseWorker.countDown()
+        assertTrue(donePublished.await(1, TimeUnit.SECONDS))
         assertEquals(SecretaryTaskStatus.done, task.status)
-        assertEquals("result text", task.resultSummary)
+        assertEquals("slow result", task.resultSummary)
+
+        val events = argumentCaptor<SecretaryTaskEvent>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        assertEquals(listOf("task.running", "task.done"), events.allValues.map { it.type })
+    }
+
+    @Test
+    fun `worker timeout fails task and late result does not overwrite failure`() {
+        val task = task()
+        val releaseWorker = CountDownLatch(1)
+        val failedPublished = CountDownLatch(1)
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenAnswer {
+            releaseWorker.await(1, TimeUnit.SECONDS)
+            "late result"
+        }
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(eventPublisher.publishEvent(any<SecretaryTaskEvent>())).thenAnswer {
+            if ((it.arguments[0] as SecretaryTaskEvent).type == "task.failed") {
+                failedPublished.countDown()
+            }
+            Unit
+        }
+        stubRunningTransition(task)
+        delegationService = service(
+            properties = SecretaryDelegationProperties(syncWaitMs = 5, workerTimeoutMs = 30),
+            executor = asyncExecutor(),
+        )
+
+        val outcome = delegationService.delegate(task, "u1", baseContext())
+
+        assertTrue(outcome.backgrounded)
+        assertTrue(failedPublished.await(1, TimeUnit.SECONDS))
+        assertEquals(SecretaryTaskStatus.failed, task.status)
+        assertEquals("Worker brukte for lang tid", task.errorMessage)
+        assertNull(task.resultSummary)
+
+        releaseWorker.countDown()
+        Thread.sleep(50)
+        assertEquals(SecretaryTaskStatus.failed, task.status)
+        assertNull(task.resultSummary)
+        val events = argumentCaptor<SecretaryTaskEvent>()
+        verify(eventPublisher, times(2)).publishEvent(events.capture())
+        assertEquals(listOf("task.running", "task.failed"), events.allValues.map { it.type })
+    }
+
+    @Test
+    fun `concurrent double delegation starts only one worker`() {
+        val task = task()
+        val calls = AtomicInteger()
+        val releaseWorker = CountDownLatch(1)
+        val donePublished = CountDownLatch(1)
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenAnswer {
+            calls.incrementAndGet()
+            releaseWorker.await(1, TimeUnit.SECONDS)
+            "result"
+        }
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        whenever(eventPublisher.publishEvent(any<SecretaryTaskEvent>())).thenAnswer {
+            if ((it.arguments[0] as SecretaryTaskEvent).type == "task.done") {
+                donePublished.countDown()
+            }
+            Unit
+        }
+        val transitions = AtomicInteger()
+        whenever(taskRepository.markRunningIfNotRunning(any(), any())).thenAnswer {
+            if (transitions.getAndIncrement() == 0) 1 else 0
+        }
+        whenever(taskRepository.findById(task.id)).thenReturn(Optional.of(task))
+        whenever(executionRepository.save(any())).thenAnswer {
+            (it.arguments[0] as TaskExecutionEntity).also { saved -> execution = saved }
+        }
+        whenever(executionRepository.findById(any())).thenAnswer { Optional.ofNullable(execution) }
+        delegationService = service(
+            properties = SecretaryDelegationProperties(syncWaitMs = 5, workerTimeoutMs = 1_000),
+            executor = asyncExecutor(),
+        )
+        val callers = asyncExecutor(2)
+        val start = CountDownLatch(1)
+
+        val first = callers.submit<DelegationOutcome> {
+            start.await()
+            delegationService.delegate(task, "u1", baseContext())
+        }
+        val second = callers.submit<DelegationOutcome> {
+            start.await()
+            delegationService.delegate(task, "u1", baseContext())
+        }
+        start.countDown()
+        first.get(1, TimeUnit.SECONDS)
+        second.get(1, TimeUnit.SECONDS)
+
+        assertEquals(1, calls.get())
+        verify(workerExecutionService, times(1)).runOpenAiWorker(any(), any(), any(), any())
+        releaseWorker.countDown()
+        assertTrue(donePublished.await(1, TimeUnit.SECONDS))
     }
 
     @Test
@@ -237,6 +377,23 @@ class SecretaryDelegationServiceTest {
         }
         whenever(executionRepository.findById(any())).thenAnswer { Optional.ofNullable(execution) }
     }
+
+    private fun service(properties: SecretaryDelegationProperties, executor: Executor) =
+        SecretaryDelegationService(
+            taskRepository,
+            executionRepository,
+            workerExecutionService,
+            agentRegistry,
+            consentPolicyService,
+            eventPublisher,
+            properties,
+            executor,
+            NoopPlatformTransactionManager,
+            null,
+        )
+
+    private fun asyncExecutor(threads: Int = 1): ExecutorService =
+        Executors.newFixedThreadPool(threads).also(executors::add)
 }
 
 private object NoopPlatformTransactionManager : PlatformTransactionManager {
