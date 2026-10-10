@@ -11,6 +11,7 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.TransactionStatus
@@ -28,13 +29,16 @@ class SecretaryTaskServiceTest {
     @Mock
     lateinit var delegationService: SecretaryDelegationService
 
+    @Mock
+    lateinit var eventPublisher: ApplicationEventPublisher
+
     private val agentRegistry = AgentRegistry()
 
     private lateinit var service: SecretaryTaskService
 
     @BeforeEach
     fun init() {
-        service = SecretaryTaskService(taskRepository, delegationService, agentRegistry)
+        service = SecretaryTaskService(taskRepository, delegationService, agentRegistry, eventPublisher)
     }
 
     @Test
@@ -74,6 +78,9 @@ class SecretaryDelegationServiceTest {
     private val agentRegistry = AgentRegistry()
     private lateinit var consentPolicyService: ConsentPolicyService
 
+    @Mock
+    lateinit var eventPublisher: ApplicationEventPublisher
+
     private lateinit var delegationService: SecretaryDelegationService
 
     @BeforeEach
@@ -85,6 +92,7 @@ class SecretaryDelegationServiceTest {
             workerExecutionService,
             agentRegistry,
             consentPolicyService,
+            eventPublisher,
             platformTransactionManager = NoopPlatformTransactionManager,
             delegatedAgentRunners = null,
         )

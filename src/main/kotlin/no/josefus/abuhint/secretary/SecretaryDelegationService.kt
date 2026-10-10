@@ -4,6 +4,7 @@ import no.josefus.abuhint.agent.AgentRegistry
 import no.josefus.abuhint.service.TokenUsageContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -16,6 +17,7 @@ class SecretaryDelegationService(
     private val workerExecutionService: WorkerExecutionService,
     private val agentRegistry: AgentRegistry,
     private val consentPolicyService: ConsentPolicyService,
+    private val eventPublisher: ApplicationEventPublisher,
     platformTransactionManager: PlatformTransactionManager,
     @Autowired(required = false) delegatedAgentRunners: List<DelegatedAgentRunner>?,
 ) {
@@ -23,6 +25,10 @@ class SecretaryDelegationService(
     private val log = LoggerFactory.getLogger(SecretaryDelegationService::class.java)
     private val optionalRunners: List<DelegatedAgentRunner> = delegatedAgentRunners.orEmpty()
     private val transactionTemplate = TransactionTemplate(platformTransactionManager)
+
+    private fun publishTaskEvent(type: String, entity: SecretaryTaskEntity) {
+        eventPublisher.publishEvent(SecretaryTaskEvent.from(type, entity))
+    }
 
     fun delegate(
         task: SecretaryTaskEntity,
@@ -37,7 +43,9 @@ class SecretaryDelegationService(
         if (!consentPolicyService.mayExecute(task)) {
             task.status = SecretaryTaskStatus.waiting_for_confirmation
             task.updatedAt = Instant.now()
-            return taskRepository.save(task)
+            val saved = taskRepository.save(task)
+            publishTaskEvent("task.needs_confirmation", saved)
+            return saved
         }
 
         val brief = task.delegatedBrief?.trim()?.takeIf { it.isNotBlank() }
@@ -65,6 +73,7 @@ class SecretaryDelegationService(
             status = TaskExecutionStatus.running,
         )
         persistRunningStart(task, execution)
+        publishTaskEvent("task.running", task)
         val startTime = System.nanoTime()
 
         return try {
@@ -115,8 +124,8 @@ class SecretaryDelegationService(
         startTime: Long,
         result: String?,
         error: String?,
-    ): SecretaryTaskEntity =
-        transactionTemplate.execute {
+    ): SecretaryTaskEntity {
+        val saved = transactionTemplate.execute {
             if (error != null) {
                 task.status = SecretaryTaskStatus.failed
                 task.errorMessage = error
@@ -127,6 +136,9 @@ class SecretaryDelegationService(
             finishExecution(execution, result, error, startTime)
             taskRepository.save(task)
         }!!
+        publishTaskEvent(if (error != null) "task.failed" else "task.done", saved)
+        return saved
+    }
 
     private fun finishSuccess(task: SecretaryTaskEntity, summary: String) {
         task.status = SecretaryTaskStatus.done

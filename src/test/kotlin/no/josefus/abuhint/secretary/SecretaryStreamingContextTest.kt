@@ -28,6 +28,7 @@ import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
 import java.util.concurrent.Executors
@@ -44,7 +45,8 @@ class SecretaryStreamingContextTest {
 
     private val repository = mock<SecretaryTaskRepository>()
     private val delegation = mock<SecretaryDelegationService>()
-    private val service = SecretaryTaskService(repository, delegation, AgentRegistry())
+    private val eventPublisher = mock<ApplicationEventPublisher>()
+    private val service = SecretaryTaskService(repository, delegation, AgentRegistry(), eventPublisher)
     private val pending = LinkedBlockingQueue<Pair<ChatRequest, StreamingChatResponseHandler>>()
     private val model = object : StreamingChatModel {
         override fun doChat(request: ChatRequest, handler: StreamingChatResponseHandler) {

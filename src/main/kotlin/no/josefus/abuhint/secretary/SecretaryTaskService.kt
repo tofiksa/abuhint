@@ -1,7 +1,8 @@
 package no.josefus.abuhint.secretary
 
-import no.josefus.abuhint.service.TokenUsageContext
 import no.josefus.abuhint.agent.AgentRegistry
+import no.josefus.abuhint.service.TokenUsageContext
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -12,7 +13,12 @@ class SecretaryTaskService(
     private val taskRepository: SecretaryTaskRepository,
     private val delegationService: SecretaryDelegationService,
     private val agentRegistry: AgentRegistry,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
+
+    private fun publishTaskEvent(type: String, entity: SecretaryTaskEntity) {
+        eventPublisher.publishEvent(SecretaryTaskEvent.from(type, entity))
+    }
 
     @Transactional(readOnly = true)
     fun listTasks(clientChatId: String): List<SecretaryTaskEntity> =
@@ -52,7 +58,9 @@ class SecretaryTaskService(
         if (assignedAgentId != null) {
             agentRegistry.require(assignedAgentId)
         }
-        return taskRepository.save(entity)
+        val saved = taskRepository.save(entity)
+        publishTaskEvent("task.created", saved)
+        return saved
     }
 
     @Transactional
@@ -81,7 +89,9 @@ class SecretaryTaskService(
         requiresConfirmation?.let { task.requiresConfirmation = it }
         acceptanceCriteria?.let { task.acceptanceCriteria = it.trim().takeIf { s -> s.isNotBlank() } }
         task.updatedAt = Instant.now()
-        return taskRepository.save(task)
+        val saved = taskRepository.save(task)
+        publishTaskEvent("task.updated", saved)
+        return saved
     }
 
     @Transactional
@@ -90,7 +100,9 @@ class SecretaryTaskService(
             ?: throw IllegalArgumentException("Task not found")
         task.status = SecretaryTaskStatus.done
         task.updatedAt = Instant.now()
-        return taskRepository.save(task)
+        val saved = taskRepository.save(task)
+        publishTaskEvent("task.done", saved)
+        return saved
     }
 
     fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): SecretaryTaskEntity {
