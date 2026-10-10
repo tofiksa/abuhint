@@ -116,7 +116,7 @@ class SecretaryTaskService(
         task.status = SecretaryTaskStatus.delegated
         task.updatedAt = Instant.now()
         taskRepository.save(task)
-        return delegationService.delegate(task, userId, baseContext)
+        return delegationService.delegate(task, userId, baseContext).task
     }
 
     fun summarizeList(clientChatId: String): String {

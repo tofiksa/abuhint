@@ -18,6 +18,7 @@ import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.TransactionStatus
 import org.springframework.transaction.support.SimpleTransactionStatus
 import java.time.Instant
+import java.util.Optional
 import java.util.UUID
 import kotlin.test.assertEquals
 
@@ -83,6 +84,7 @@ class SecretaryDelegationServiceTest {
     lateinit var eventPublisher: ApplicationEventPublisher
 
     private lateinit var delegationService: SecretaryDelegationService
+    private var execution: TaskExecutionEntity? = null
 
     @BeforeEach
     fun init() {
@@ -94,6 +96,8 @@ class SecretaryDelegationServiceTest {
             agentRegistry,
             consentPolicyService,
             eventPublisher,
+            properties = SecretaryDelegationProperties(),
+            secretaryWorkerExecutor = { command -> command.run() },
             platformTransactionManager = NoopPlatformTransactionManager,
             delegatedAgentRunners = null,
         )
@@ -123,7 +127,7 @@ class SecretaryDelegationServiceTest {
         )
         whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result text")
         whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
-        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
+        stubRunningTransition(task)
 
         val base = TokenUsageContext(
             userId = "u1",
@@ -139,8 +143,8 @@ class SecretaryDelegationServiceTest {
             "Finn tre kilder",
             base.copy(taskId = id.toString(), workerAgent = "RESEARCH", parentAgent = "SECRETARY"),
         )
-        // task saved twice (running + done), execution saved twice (start + finish)
-        verify(taskRepository, times(2)).save(any())
+        // The running transition is an atomic update; completion saves the task entity.
+        verify(taskRepository).save(any())
         verify(executionRepository, times(2)).save(any())
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("result text", task.resultSummary)
@@ -151,7 +155,7 @@ class SecretaryDelegationServiceTest {
         val task = task()
         whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result text")
         whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
-        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
+        stubRunningTransition(task)
 
         delegationService.delegate(task, "u1", baseContext())
 
@@ -166,7 +170,7 @@ class SecretaryDelegationServiceTest {
         whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any()))
             .thenThrow(IllegalStateException("worker exploded"))
         whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
-        whenever(executionRepository.save(any())).thenAnswer { it.arguments[0] as TaskExecutionEntity }
+        stubRunningTransition(task)
 
         delegationService.delegate(task, "u1", baseContext())
 
@@ -224,6 +228,15 @@ class SecretaryDelegationServiceTest {
         assistant = "SECRETARY",
         clientPlatform = "test",
     )
+
+    private fun stubRunningTransition(task: SecretaryTaskEntity) {
+        whenever(taskRepository.markRunningIfNotRunning(any(), any())).thenReturn(1)
+        whenever(taskRepository.findById(task.id)).thenReturn(Optional.of(task))
+        whenever(executionRepository.save(any())).thenAnswer {
+            (it.arguments[0] as TaskExecutionEntity).also { saved -> execution = saved }
+        }
+        whenever(executionRepository.findById(any())).thenAnswer { Optional.ofNullable(execution) }
+    }
 }
 
 private object NoopPlatformTransactionManager : PlatformTransactionManager {
