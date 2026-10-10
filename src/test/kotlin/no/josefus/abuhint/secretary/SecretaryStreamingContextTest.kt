@@ -102,6 +102,7 @@ class SecretaryStreamingContextTest {
                 respondWithTool("markSecretaryTaskReady", """{"taskId":"${task.id}"}""")
                 assertEquals(SecretaryTaskStatus.ready, task.status)
 
+                whenever(repository.markDelegatedIfIdle(any(), any())).thenReturn(1)
                 whenever(delegation.delegate(any(), any(), any())).thenReturn(DelegationOutcome(task))
                 respondWithTool("delegateSecretaryTask", """{"taskId":"${task.id}"}""")
                 verify(delegation).delegate(

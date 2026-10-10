@@ -5,12 +5,14 @@ import no.josefus.abuhint.service.TokenUsageContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.times
+import org.mockito.kotlin.timeout
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.context.ApplicationEventPublisher
@@ -75,38 +77,85 @@ class SecretaryTaskServiceTest {
     }
 
     @Test
-    fun `delegateTask does not launch another worker when task is already running`() {
-        val task = SecretaryTaskEntity(
-            userId = "u1",
-            chatId = "chat-a",
-            title = "Running task",
-            description = null,
-            status = SecretaryTaskStatus.running,
-            assignedAgentId = AgentRegistry.IDs.RESEARCH,
-            delegatedBrief = null,
-            resultSummary = null,
-            errorMessage = null,
-            acceptanceCriteria = null,
-            artifactsJson = null,
-        )
+    fun `delegateTask does not launch another worker when task is already claimed`() {
+        val task = serviceTask(SecretaryTaskStatus.running)
         whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenReturn(task)
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenReturn(0)
 
-        val outcome = service.delegateTask(
-            task.id,
-            "u1",
-            TokenUsageContext(
-                userId = "u1",
-                chatId = "chat-a",
-                assistant = "SECRETARY",
-                clientPlatform = "test",
-            ),
-        )
+        val outcome = service.delegateTask(task.id, "u1", serviceContext())
 
         assertTrue(outcome.backgrounded)
         assertEquals(SecretaryTaskStatus.running, outcome.task.status)
         verify(taskRepository, times(0)).save(any())
         verify(delegationService, times(0)).delegate(any(), any(), any())
     }
+
+    @Test
+    fun `concurrent delegateTask calls hand only one to the delegation service`() {
+        // Both callers read a stale `ready` entity; only the atomic claim decides who delegates.
+        val task = serviceTask(SecretaryTaskStatus.ready)
+        whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenAnswer { serviceTask(SecretaryTaskStatus.ready, task.id) }
+        val claims = AtomicInteger()
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenAnswer {
+            if (claims.getAndIncrement() == 0) 1 else 0
+        }
+        whenever(delegationService.delegate(any(), any(), any())).thenAnswer {
+            DelegationOutcome(it.arguments[0] as SecretaryTaskEntity, backgrounded = true)
+        }
+        val callers = Executors.newFixedThreadPool(2)
+        try {
+            val start = CountDownLatch(1)
+            val results = List(2) {
+                callers.submit<DelegationOutcome> {
+                    start.await()
+                    service.delegateTask(task.id, "u1", serviceContext())
+                }
+            }
+            start.countDown()
+            results.forEach { it.get(1, TimeUnit.SECONDS) }
+        } finally {
+            callers.shutdownNow()
+        }
+
+        verify(delegationService, times(1)).delegate(any(), any(), any())
+    }
+
+    @Test
+    fun `delegateTask releases claim as failed when delegation throws early`() {
+        val task = serviceTask(SecretaryTaskStatus.ready)
+        whenever(taskRepository.findByIdAndUserId(task.id, "u1")).thenReturn(task)
+        whenever(taskRepository.markDelegatedIfIdle(any(), any())).thenReturn(1)
+        whenever(delegationService.delegate(any(), any(), any())).thenThrow(IllegalStateException("boom"))
+        whenever(taskRepository.findById(task.id)).thenReturn(Optional.of(task))
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+
+        assertThrows<IllegalStateException> { service.delegateTask(task.id, "u1", serviceContext()) }
+
+        assertEquals(SecretaryTaskStatus.failed, task.status)
+        assertEquals("boom", task.errorMessage)
+    }
+
+    private fun serviceTask(status: SecretaryTaskStatus, id: UUID = UUID.randomUUID()) = SecretaryTaskEntity(
+        id = id,
+        userId = "u1",
+        chatId = "chat-a",
+        title = "Task",
+        description = null,
+        status = status,
+        assignedAgentId = AgentRegistry.IDs.RESEARCH,
+        delegatedBrief = null,
+        resultSummary = null,
+        errorMessage = null,
+        acceptanceCriteria = null,
+        artifactsJson = null,
+    )
+
+    private fun serviceContext() = TokenUsageContext(
+        userId = "u1",
+        chatId = "chat-a",
+        assistant = "SECRETARY",
+        clientPlatform = "test",
+    )
 }
 
 @ExtendWith(MockitoExtension::class)
@@ -228,9 +277,22 @@ class SecretaryDelegationServiceTest {
         assertEquals(SecretaryTaskStatus.done, task.status)
         assertEquals("slow result", task.resultSummary)
 
-        val events = argumentCaptor<SecretaryTaskEvent>()
-        verify(eventPublisher, times(2)).publishEvent(events.capture())
-        assertEquals(listOf("task.running", "task.done"), events.allValues.map { it.type })
+        val background = argumentCaptor<SecretaryTaskBackgroundCompletedEvent>()
+        verify(eventPublisher, timeout(1_000)).publishEvent(background.capture())
+        assertEquals(task.id, background.firstValue.taskId)
+        assertEquals(listOf("task.running", "task.done"), publishedTaskEventTypes())
+    }
+
+    @Test
+    fun `fast worker does not request a background follow-up`() {
+        val task = task()
+        whenever(workerExecutionService.runOpenAiWorker(any(), any(), any(), any())).thenReturn("result")
+        whenever(taskRepository.save(any())).thenAnswer { it.arguments[0] as SecretaryTaskEntity }
+        stubRunningTransition(task)
+
+        delegationService.delegate(task, "u1", baseContext())
+
+        verify(eventPublisher, times(0)).publishEvent(any<SecretaryTaskBackgroundCompletedEvent>())
     }
 
     @Test
@@ -267,9 +329,8 @@ class SecretaryDelegationServiceTest {
         Thread.sleep(50)
         assertEquals(SecretaryTaskStatus.failed, task.status)
         assertNull(task.resultSummary)
-        val events = argumentCaptor<SecretaryTaskEvent>()
-        verify(eventPublisher, times(2)).publishEvent(events.capture())
-        assertEquals(listOf("task.running", "task.failed"), events.allValues.map { it.type })
+        verify(eventPublisher, timeout(1_000)).publishEvent(any<SecretaryTaskBackgroundCompletedEvent>())
+        assertEquals(listOf("task.running", "task.failed"), publishedTaskEventTypes())
     }
 
     @Test
@@ -395,6 +456,12 @@ class SecretaryDelegationServiceTest {
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
     )
+
+    private fun publishedTaskEventTypes(): List<String> {
+        val events = argumentCaptor<Any>()
+        verify(eventPublisher, org.mockito.kotlin.atLeastOnce()).publishEvent(events.capture())
+        return events.allValues.filterIsInstance<SecretaryTaskEvent>().map { it.type }
+    }
 
     private fun baseContext() = TokenUsageContext(
         userId = "u1",

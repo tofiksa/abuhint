@@ -112,14 +112,35 @@ class SecretaryTaskService(
     fun delegateTask(taskId: UUID, userId: String, baseContext: TokenUsageContext): DelegationOutcome {
         val task = taskRepository.findByIdAndUserId(taskId, userId)
             ?: throw IllegalArgumentException("Task not found")
-        if (task.status == SecretaryTaskStatus.running) {
-            return DelegationOutcome(task, backgrounded = true)
+        val agentId = task.assignedAgentId
+        require(!agentId.isNullOrBlank()) { "assign agent before delegate" }
+        agentRegistry.require(agentId)
+
+        val now = Instant.now()
+        if (taskRepository.markDelegatedIfIdle(task.id, now) == 0) {
+            // Another call already owns this task (delegated or running); do not start a second worker.
+            val current = taskRepository.findByIdAndUserId(taskId, userId) ?: task
+            return DelegationOutcome(current, backgrounded = true)
         }
-        require(!task.assignedAgentId.isNullOrBlank()) { "assign agent before delegate" }
         task.status = SecretaryTaskStatus.delegated
-        task.updatedAt = Instant.now()
-        taskRepository.save(task)
-        return delegationService.delegate(task, userId, baseContext)
+        task.updatedAt = now
+
+        return try {
+            delegationService.delegate(task, userId, baseContext)
+        } catch (e: Exception) {
+            releaseStuckDelegation(task.id, e)
+            throw e
+        }
+    }
+
+    /** Prevents a task from staying `delegated` forever (which would block re-delegation) when delegate fails early. */
+    private fun releaseStuckDelegation(taskId: UUID, error: Exception) {
+        val current = taskRepository.findById(taskId).orElse(null) ?: return
+        if (current.status != SecretaryTaskStatus.delegated) return
+        current.status = SecretaryTaskStatus.failed
+        current.errorMessage = error.message ?: "Unknown error"
+        current.updatedAt = Instant.now()
+        publishTaskEvent("task.failed", taskRepository.save(current))
     }
 
     fun summarizeList(clientChatId: String): String {

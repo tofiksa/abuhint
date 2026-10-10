@@ -7,9 +7,8 @@ import no.josefus.abuhint.secretary.SecretaryTaskSnapshot
 import no.josefus.abuhint.secretary.SecretaryTaskStatus
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
-import org.mockito.kotlin.inOrder
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -18,6 +17,7 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 
 class SecretaryTaskControllerTest {
 
@@ -42,26 +42,17 @@ class SecretaryTaskControllerTest {
     }
 
     @Test
-    fun `events endpoint subscribes for user and sends snapshot`() {
+    fun `events endpoint subscribes for user with snapshot as initial event`() {
         authenticate("user-a")
         val emitter = mock<SseEmitter>()
         whenever(taskService.listTasks("chat-a", "user-a")).thenReturn(listOf(task()))
-        whenever(eventHub.subscribe("chat-a", "user-a", 1_800_000L)).thenReturn(emitter)
+        val initial = argumentCaptor<() -> Any>()
+        whenever(eventHub.subscribe(eq("chat-a"), eq("user-a"), eq(1_800_000L), initial.capture())).thenReturn(emitter)
 
-        controller.taskEvents("chat-a")
+        val result = controller.taskEvents("chat-a")
 
-        verify(eventHub).subscribe("chat-a", "user-a", 1_800_000L)
-        inOrder(eventHub, taskService, emitter) {
-            verify(eventHub).subscribe("chat-a", "user-a", 1_800_000L)
-            verify(taskService).listTasks("chat-a", "user-a")
-            verify(emitter).send(any<SseEmitter.SseEventBuilder>())
-        }
-        val event = argumentCaptor<SseEmitter.SseEventBuilder>()
-        verify(emitter).send(event.capture())
-        val snapshot = event.firstValue.build()
-            .map { it.data }
-            .filterIsInstance<SecretaryTaskSnapshot>()
-            .single()
+        assertSame(emitter, result)
+        val snapshot = initial.firstValue()
         assertIs<SecretaryTaskSnapshot>(snapshot)
         assertEquals(listOf("Task"), snapshot.tasks.map { it.title })
     }
